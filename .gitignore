@@ -1,0 +1,9 @@
+.envrc
+*.sqlite
+*.sqlite-*
+/docs/
+/lib/
+/bin/
+/.shards/
+*.dwarf
+result*
