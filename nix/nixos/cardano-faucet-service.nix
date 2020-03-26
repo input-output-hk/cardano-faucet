@@ -1,7 +1,7 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.cardano-faucet;
-  inherit (lib) mkOption types mkIf optionals;
+  inherit (lib) mkOption mkForce types mkIf optionals;
   inherit (builtins) replaceStrings;
   sources = import ../sources.nix;
   iohkNix = import sources.iohk-nix {};
@@ -43,10 +43,19 @@ in {
         else null;
     };
 
+    systemd.services.cardano-node = {
+      startLimitIntervalSec = 0;
+      serviceConfig = {
+        Restart = mkForce "always";
+        RestartSec = mkForce 10;
+      };
+    };
+
     systemd.services.cardano-wallet = {
       description = "cardano-wallet daemon";
       after = [ "cardano-node.service"];
       wantedBy = [ "multi-user.target" ];
+      startLimitIntervalSec = 0;
 
       script = ''
         ${cfg.walletPackage}/bin/cardano-wallet-byron serve \
@@ -58,6 +67,7 @@ in {
 
       serviceConfig = {
         Restart = "always";
+        RestartSec = 10;
         User = "cardano-node";
         StateDirectory = "cardano-wallet";
         RuntimeDirectory = "cardano-wallet";
@@ -73,7 +83,7 @@ in {
       description = "cardano-faucet daemon";
       after = [ "cardano-wallet.service"];
       wantedBy = [ "multi-user.target" ];
-      startLimitIntervalSec = 10;
+      startLimitIntervalSec = 0;
 
       script = ''
         ${cfg.package}/bin/server
@@ -81,6 +91,7 @@ in {
 
       serviceConfig = {
         Restart = "always";
+        RestartSec = 10;
         User = "cardano-node";
         StateDirectory = "cardano-faucet";
         RuntimeDirectory = "cardano-faucet";
