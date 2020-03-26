@@ -4,6 +4,7 @@ with {
     inherit (import sources.niv { }) niv;
     inherit (import sources.nixpkgs-crystal {}) crystal;
     inherit (import sources.cardano-wallet { gitrev = sources.cardano-wallet.rev; }) cardano-wallet-byron;
+    cardano-wallet-byron-cli = (import sources.cardano-wallet-cli { gitrev = sources.cardano-wallet-cli.rev; }).cardano-wallet-byron;
     packages = self.callPackages ./packages.nix { };
     inherit (import sources.gitignore {}) gitignoreSource;
     iohkNix = import sources.iohk-nix {
