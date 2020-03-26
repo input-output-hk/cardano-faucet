@@ -61,7 +61,9 @@ in {
         ${cfg.walletPackage}/bin/cardano-wallet-byron serve \
           --node-socket ${config.services.cardano-node.socketPath} \
           ${if (cfg.cardanoEnv == "mainnet") then "--mainnet" else "--testnet"} \
-            ${config.services.cardano-node.stateDir}/genesis.json \
+            ${if (cfg.cardanoEnv == "selfnode")
+                then "${config.services.cardano-node.stateDir}/genesis.json"
+                else config.services.cardano-node.genesisFile} \
           --database /var/lib/cardano-wallet/${cfg.cardanoEnv};
       '';
 
