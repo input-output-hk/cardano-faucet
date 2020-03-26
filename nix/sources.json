@@ -23,6 +23,18 @@
         "url": "https://github.com/input-output-hk/cardano-wallet/archive/49839415db72dc428d24bb0451b5eff0415545c2.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
+    "cardano-wallet-cli": {
+        "branch": "KtorZ/229/byron-wallet-cli",
+        "description": "The component that acts as a Cardano node for end-user wallet operations. Smaller exchanges who don’t need to manage UTXOs can self-integrate using the wallet.",
+        "homepage": "",
+        "owner": "input-output-hk",
+        "repo": "cardano-wallet",
+        "rev": "33ea3c653feda78fbb8055499ffb4c1e3f954f8a",
+        "sha256": "0bxmb6jgifyiw8pl4yshv95b6d8ss66v03crrj78jgyj48hm546c",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/cardano-wallet/archive/33ea3c653feda78fbb8055499ffb4c1e3f954f8a.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
     "gitignore": {
         "branch": "master",
         "description": "Nix function for filtering local git sources",
