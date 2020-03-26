@@ -30,7 +30,7 @@ else
 fi
 
 if [ -z "${MNEMONIC_PATH:-}" ]; then
-  MNEMONIC="${MNEMONIC:-"$(@cardanoWalletByron@ mnemonic generate)"}"
+  MNEMONIC="${MNEMONIC:-"$(@cardanoWalletByronCli@ mnemonic generate)"}"
 else
   MNEMONIC="$(cat "$MNEMONIC_PATH")"
 fi
@@ -40,7 +40,7 @@ fi
 MNEMONIC=$MNEMONIC PASSPHRASE=$PASSPHRASE OUT=$OUT @expect@ << 'END' > /dev/null
   set chan [open $::env(OUT) w]
   set timeout 10
-  spawn @cardanoWalletByron@ wallet create from-mnemonic --wallet-style random ByronFaucetWallet
+  spawn @cardanoWalletByronCli@ wallet create from-mnemonic --wallet-style random ByronFaucetWallet
   sleep 0.1
   expect "Please enter 12 mnemonic words : "
   send -- "$::env(MNEMONIC)\r"
