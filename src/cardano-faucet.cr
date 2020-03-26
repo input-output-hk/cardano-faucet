@@ -99,8 +99,9 @@ module Cardano
     def self.for_wallet(wallet)
       #value = JSON.parse(`cardano-wallet-byron wallet get #{wallet}`)["balance"]["available"]["quantity"].as_i64
 
-      LOG.debug("Fetching available wallet value...")
       path = "#{WALLET_API}/byron-wallets/#{wallet}"
+      LOG.debug("Fetching available wallet value; curl equivalent:")
+      LOG.debug("curl -v #{path}")
       response = Wallet.apiGet(path)
       value = 0
       if response[0].success?
@@ -114,8 +115,9 @@ module Cardano
     def self.for_wallet(wallet)
       #counter = JSON.parse(`cardano-wallet-byron transaction list #{wallet}`)
 
-      LOG.debug("Fetching wallet transaction count...")
       path = "#{WALLET_API}/byron-wallets/#{wallet}/transactions"
+      LOG.debug("Fetching wallet transaction count; curl equivalent:")
+      LOG.debug("curl -v #{path} | jq '. | length'")
       response = Wallet.apiGet(path)
       if response[0].success?
         counter = JSON.parse(response[1].not_nil!)
@@ -128,9 +130,10 @@ module Cardano
     def self.for_tx(wallet, dest_addr)
       # fees = JSON.parse(`cardano-wallet-byron transaction fees #{wallet} --payment #{LOVELACES_TO_GIVE}@#{dest_addr}`)["amount"]["quantity"].as_i
 
-      LOG.debug("Fetching transaction fee estimate...")
       path = "#{WALLET_API}/byron-wallets/#{wallet}/payment-fees"
       body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{LOVELACES_TO_GIVE},"unit":"lovelace"}}]})
+      LOG.debug("Fetching transaction fee estimate; curl equivalent:")
+      LOG.debug("curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1")
       response = Wallet.apiPost(path, body)
       fees = 0
       if response[0].success?
@@ -148,8 +151,9 @@ module Cardano
     def self.get
       #from_json(`cardano-wallet-byron network parameters latest`)
 
-      LOG.debug("Fetching network parameters...")
       path = "#{WALLET_API}/network/parameters/latest"
+      LOG.debug("Fetching network parameters; curl equivalent:")
+      LOG.debug("curl -v #{path}")
       response = Wallet.apiGet(path)
       from_json(response[1].not_nil!)
     end
@@ -217,24 +221,26 @@ module Cardano
     end
 
     def on_error(error)
+      msg = { statusCode: 500,
+              error:      HTTP::Status::INTERNAL_SERVER_ERROR.to_s,
+              message:    error.to_s,
+            }
+      LOG.debug(msg)
       {
         status: HTTP::Status::INTERNAL_SERVER_ERROR,
-        body:   {
-          statusCode: 500,
-          error:      HTTP::Status::INTERNAL_SERVER_ERROR.to_s,
-          message:    error.to_s,
-        },
+        body:   msg
       }
     end
 
     def on_not_found
+      msg = { statusCode: 404,
+              error:      "Not Found",
+              message:    "No URL found"
+            }
+      LOG.debug(msg)
       {
         status: HTTP::Status::NOT_FOUND,
-        body:   {
-          statusCode: 404,
-          error:      "Not Found",
-          message:    "No URL found",
-        },
+        body:   msg
       }
     end
 
@@ -263,14 +269,15 @@ module Cardano
 
     def on_too_many_requests(try_again : Time) : Response
       delta = (try_again - Time.utc).total_seconds.to_i
+      msg = { statusCode: 429,
+              error:      "Too Many Requests",
+              message:    "Try again in #{delta} seconds",
+              retryAfter: try_again.to_utc
+            }
+      LOG.debug(msg)
       {
         status: HTTP::Status::TOO_MANY_REQUESTS,
-        body:   {
-          statusCode: 429,
-          error:      "Too Many Requests",
-          message:    "Try again in #{delta} seconds",
-          retryAfter: try_again.to_utc,
-        },
+        body:   msg
       }
     end
 
@@ -365,6 +372,8 @@ module Cardano
 
       path = "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions"
       body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{@amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
+      LOG.debug("Performing send; curl equivalent:")
+      LOG.debug("curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1")
       response = Wallet.apiPost(path, body)
       id = "ERROR"
       if response[0].success?
@@ -373,13 +382,14 @@ module Cardano
       end
 
       LOG.info("The id for this funds transfer transaction is: #{id}")
-      LOG.info({ success: true, amount: @amount, fee: tx_fees, txid: id })
-      {
-        success: true,
+      msg = {
+        success: response[0].success?,
         amount:  @amount,
         fee:     tx_fees,
         txid:    id,
       }
+      LOG.info(msg)
+      msg
     end
   end
 end
