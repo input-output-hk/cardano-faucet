@@ -1,14 +1,14 @@
 {
     "cardano-node": {
-        "branch": "master",
+        "branch": "1.9.0",
         "description": null,
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "a3dcbd6107793f4072ba5bffbac530fdd4bbd615",
-        "sha256": "0x8ypklm83ax3s2ncy60rzggxd90v390q4rvqc5z0yvx782s3l38",
+        "rev": "81878d59801dc453e157cf6b0d8e29e3a98c2988",
+        "sha256": "1sc7ldszxqi5ddax92v72fwkxbd5b65a3jgps51zpv5wqmss9l46",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/a3dcbd6107793f4072ba5bffbac530fdd4bbd615.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/81878d59801dc453e157cf6b0d8e29e3a98c2988.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-wallet": {
@@ -17,10 +17,10 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-wallet",
-        "rev": "49839415db72dc428d24bb0451b5eff0415545c2",
-        "sha256": "1zjigzjzpacbqifb3ldqv57z2ylb4gc2fc2w8db0xr890k6j4589",
+        "rev": "485589cb92e844a19c941bcf4f13e58f793d980c",
+        "sha256": "14azcvj5c6vjj90yrm9b28izzxrblfifnk1sqghxcpzmibh699wn",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-wallet/archive/49839415db72dc428d24bb0451b5eff0415545c2.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-wallet/archive/485589cb92e844a19c941bcf4f13e58f793d980c.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-wallet-cli": {
