@@ -1,14 +1,14 @@
 {
     "cardano-node": {
-        "branch": "1.9.0",
+        "branch": "1.9.3",
         "description": null,
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "81878d59801dc453e157cf6b0d8e29e3a98c2988",
-        "sha256": "1sc7ldszxqi5ddax92v72fwkxbd5b65a3jgps51zpv5wqmss9l46",
+        "rev": "b0c7d4457704a46167687f519f2e0f315ab5abd4",
+        "sha256": "1mkaxx92fc8hi3bpsazlqs6nc89g0bz3rg6wrlkrlrqnwn1xkdj8",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/81878d59801dc453e157cf6b0d8e29e3a98c2988.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/b0c7d4457704a46167687f519f2e0f315ab5abd4.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-wallet": {
@@ -17,22 +17,10 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-wallet",
-        "rev": "485589cb92e844a19c941bcf4f13e58f793d980c",
-        "sha256": "14azcvj5c6vjj90yrm9b28izzxrblfifnk1sqghxcpzmibh699wn",
+        "rev": "ab239d96d13968d1177abf55a2e5bee9174a27e9",
+        "sha256": "0zcc6dx821jq5183w59l7yk8j54ld43mbp9djynf201f0x3jx8va",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-wallet/archive/485589cb92e844a19c941bcf4f13e58f793d980c.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
-    "cardano-wallet-cli": {
-        "branch": "KtorZ/229/byron-wallet-cli",
-        "description": "The component that acts as a Cardano node for end-user wallet operations. Smaller exchanges who don’t need to manage UTXOs can self-integrate using the wallet.",
-        "homepage": "",
-        "owner": "input-output-hk",
-        "repo": "cardano-wallet",
-        "rev": "33ea3c653feda78fbb8055499ffb4c1e3f954f8a",
-        "sha256": "0bxmb6jgifyiw8pl4yshv95b6d8ss66v03crrj78jgyj48hm546c",
-        "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-wallet/archive/33ea3c653feda78fbb8055499ffb4c1e3f954f8a.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-wallet/archive/ab239d96d13968d1177abf55a2e5bee9174a27e9.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "gitignore": {
