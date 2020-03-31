@@ -23,6 +23,8 @@ SECRET_PASSPHRASE             = readFile(FAUCET_PASSPHRASE_PATH)
 API_URI                       = URI.parse("#{WALLET_API}")
 HEADERS                       = HTTP::Headers{ "Content-Type" => "application/json; charset=utf-8" }
 
+MIN_METRICS_PERIOD            = 10
+
 STDOUT.sync = true
 LOG = Logger.new(STDOUT)
 case FAUCET_LOG_LEVEL
@@ -163,7 +165,7 @@ module Cardano
     TIME_BETWEEN_REQUESTS = SECONDS_BETWEEN_REQUESTS.seconds
 
     alias Allow = Bool
-    alias Response = {status: HTTP::Status, body: SendFundsResult | NotFoundResult | RateLimitResult}
+    alias Response = {status: HTTP::Status, body: SendFundsResult | NotFoundResult | RateLimitResult | String}
     alias SendFundsResult = {success: Bool, amount: UInt64, fee: Int32, txid: String}
     alias RateLimitResult = {statusCode: Int32, error: String, message: String, retryAfter: Time}
     alias NotFoundResult = {statusCode: Int32, error: String, message: String}
@@ -171,11 +173,14 @@ module Cardano
     @amount : UInt64
     @settings : Settings
     @db : DB::Database
+    @lastMetricsTime : Time
+    @lastMetrics : String
 
     def initialize(@amount, @db)
       @settings = Settings.get
       @db.scalar "PRAGMA journal_mode=WAL"
-
+      @lastMetricsTime = Time.utc
+      @lastMetrics = ""
       migrations
     end
 
@@ -213,6 +218,8 @@ module Cardano
       case context.request.method
       when "POST"
         on_post(context)
+      when "GET"
+        on_get(context)
       else
         on_not_found
       end
@@ -225,7 +232,7 @@ module Cardano
               error:      HTTP::Status::INTERNAL_SERVER_ERROR.to_s,
               message:    error.to_s,
             }
-      LOG.debug(msg)
+      LOG.debug(msg.to_json)
       {
         status: HTTP::Status::INTERNAL_SERVER_ERROR,
         body:   msg
@@ -237,7 +244,7 @@ module Cardano
               error:      "Not Found",
               message:    "No URL found"
             }
-      LOG.debug(msg)
+      LOG.debug(msg.to_json)
       {
         status: HTTP::Status::NOT_FOUND,
         body:   msg
@@ -259,6 +266,31 @@ module Cardano
       end
     end
 
+    def on_get(context : HTTP::Server::Context) : Response
+      match = context.request.resource.match(%r(/metrics/?$))
+      return on_not_found unless match
+
+      on_metrics
+    end
+
+    def on_metrics : Response
+      now = Time.utc
+      metricsDelta = now - @lastMetricsTime
+
+      if metricsDelta.seconds > MIN_METRICS_PERIOD || @lastMetrics == ""
+        result = Account.for_wallet(FAUCET_WALLET_ID)
+        @lastMetricsTime = now
+        @lastMetrics = "cardano_faucet_metrics_value_available #{result}"
+      else
+        LOG.debug("Metrics were fetched #{@lastMetricsTime} with a refresh period \
+                   of #{MIN_METRICS_PERIOD}s; serving previous result...")
+      end
+      {
+        status:  HTTP::Status::OK,
+        body:    @lastMetrics,
+      }
+    end
+
     def on_send_money(to_address : String) : Response
       result = send_funds(to_address)
       {
@@ -274,7 +306,7 @@ module Cardano
               message:    "Try again in #{delta} seconds",
               retryAfter: try_again.to_utc
             }
-      LOG.debug(msg)
+      LOG.debug(msg.to_json)
       {
         status: HTTP::Status::TOO_MANY_REQUESTS,
         body:   msg
@@ -388,7 +420,7 @@ module Cardano
         fee:     tx_fees,
         txid:    id,
       }
-      LOG.info(msg)
+      LOG.info(msg.to_json)
       msg
     end
   end
@@ -401,7 +433,13 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
     context.response.content_type = "application/json"
     status_and_body = faucet.on_request(context)
     context.response.status = status_and_body[:status]
-    context.response.print(status_and_body[:body].to_json)
+    if context.request.method == "GET" \
+       && context.request.resource.match(%r(/metrics/?$)) \
+       && context.response.status == HTTP::Status::OK
+      context.response.print(status_and_body[:body])
+    else
+      context.response.print(status_and_body[:body].to_json)
+    end
   end
 
   address = server.bind_tcp(FAUCET_LISTEN_PORT)
