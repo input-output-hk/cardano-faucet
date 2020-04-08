@@ -17,10 +17,10 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-wallet",
-        "rev": "5de556e2376964b3990ec93612831fc652de85c7",
-        "sha256": "1plasnl8abgvg6m5p8c5mm4c80r2arsacjn397pnsirkv5vb9d4b",
+        "rev": "cff0e391985887f60b9076aace207674bef6a2b4",
+        "sha256": "1mmyr2swgh3in64i51lc659f3vynqlwlh52i86mqyl1hjyqd25kv",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-wallet/archive/5de556e2376964b3990ec93612831fc652de85c7.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-wallet/archive/cff0e391985887f60b9076aace207674bef6a2b4.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "gitignore": {
@@ -41,10 +41,10 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "507b0703dbdd10fdb2183430cb96571350ae13d0",
-        "sha256": "0ajg42zcz4025ihfvqmydh43b3msk11b96n6bqc43b35l1g7di0n",
+        "rev": "dfce0e88fee7d5c29fd6f128d02be3594ae39c88",
+        "sha256": "0z9wn2j2ss03w83n298fcapdw9w3cs13w5hrlp3apwjr9iq7x720",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/iohk-nix/archive/507b0703dbdd10fdb2183430cb96571350ae13d0.tar.gz",
+        "url": "https://github.com/input-output-hk/iohk-nix/archive/dfce0e88fee7d5c29fd6f128d02be3594ae39c88.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "niv": {
