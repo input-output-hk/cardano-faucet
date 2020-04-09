@@ -1,5 +1,6 @@
 require "http/server"
 require "http/client"
+require "http/params"
 require "uri"
 require "socket"
 require "json"
@@ -12,18 +13,11 @@ FAUCET_LOG_LEVEL              = ENV.fetch("FAUCET_LOG_LEVEL", "INFO")
 FAUCET_LISTEN_PORT            = ENV.fetch("FAUCET_LISTEN_PORT", "8091").to_i
 FAUCET_WALLET_ID_PATH         = ENV.fetch("FAUCET_WALLET_ID_PATH", "/var/lib/cardano-faucet/faucet.id")
 FAUCET_PASSPHRASE_PATH        = ENV.fetch("FAUCET_SECRET_PASSPHRASE_PATH", "/var/lib/cardano-faucet/faucet.passphrase")
+FAUCET_API_KEY_PATH           = ENV.fetch("FAUCET_API_KEY_PATH", "/var/lib/cardano-faucet/faucet.apikey")
 WALLET_LISTEN_PORT            = ENV.fetch("WALLET_LISTEN_PORT", "8090").to_i
 WALLET_API                    = ENV.fetch("WALLET_API", "http://localhost:#{WALLET_LISTEN_PORT}/v2")
 LOVELACES_TO_GIVE             = ENV.fetch("LOVELACES_TO_GIVE", "1000000000").to_u64
 SECONDS_BETWEEN_REQUESTS      = ENV.fetch("SECONDS_BETWEEN_REQUESTS", "86400").to_i
-
-FAUCET_WALLET_ID              = readFile(FAUCET_WALLET_ID_PATH)
-SECRET_PASSPHRASE             = readFile(FAUCET_PASSPHRASE_PATH)
-
-API_URI                       = URI.parse("#{WALLET_API}")
-HEADERS                       = HTTP::Headers{ "Content-Type" => "application/json; charset=utf-8" }
-
-MIN_METRICS_PERIOD            = 10
 
 STDOUT.sync = true
 LOG = Logger.new(STDOUT)
@@ -44,6 +38,19 @@ case FAUCET_LOG_LEVEL
     raise "Unknown log level: #{FAUCET_LOG_LEVEL}"
 end
 
+FAUCET_WALLET_ID              = readFile(FAUCET_WALLET_ID_PATH)
+SECRET_PASSPHRASE             = readFile(FAUCET_PASSPHRASE_PATH)
+API_KEYS                      = readKeys(FAUCET_API_KEY_PATH)
+
+API_KEY_LEN                   = 32
+API_KEY_COMMENT_MAX_LEN       = 64
+
+API_URI                       = URI.parse("#{WALLET_API}")
+HEADERS                       = HTTP::Headers{ "Content-Type" => "application/json; charset=utf-8" }
+
+MIN_METRICS_PERIOD            = 10
+
+
 def readFile(file)
   if (File.exists?(file) && !File.empty?(file))
     return File.read(file).strip
@@ -52,6 +59,30 @@ def readFile(file)
   end
 end
 
+def readKeys(file)
+  apiKeys = Hash(String, String).new
+  f = readFile(file)
+  if f != ""
+    f.split("\n").each.with_index do |i, c|
+      if i.lstrip =~ /^#/ || i =~ /^\s*$/
+        next
+      end
+      keyFields = i.split(" ")
+      if !(keyFields[0] =~ /^[A-Za-z0-9]{#{API_KEY_LEN}}$/)
+        msg = "API Key file \"#{file}\", line \"#{c + 1}\", key \"#{keyFields[0]}\" " \
+              "is not a #{API_KEY_LEN} char alphanumeric"
+        LOG.error(msg)
+        raise(msg)
+      end
+      if keyFields.size == 1
+        apiKeys[keyFields[0]] = "Uncommented"
+      else
+        apiKeys[keyFields[0]] = keyFields[1..-1].join(" ")[0..API_KEY_COMMENT_MAX_LEN]
+      end
+    end
+  end
+  apiKeys
+end
 
 module Cardano
 
@@ -252,14 +283,24 @@ module Cardano
     end
 
     def on_post(context : HTTP::Server::Context) : Response
-      match = context.request.resource.match(%r(/send-money/([^/]+)))
+      rateExempted = false
+
+      match = context.request.path.match(%r(/send-money/([^/]+)))
       return on_not_found unless match
+
+      if context.request.query_params.has_key?("apiKey")
+        if API_KEYS.has_key? context.request.query_params["apiKey"]
+          rateExempted = true
+          LOG.debug("Rate exempted by API key with comment: " \
+                    "\"#{API_KEYS[context.request.query_params["apiKey"]]}\"")
+        end
+      end
 
       rate_limiter = limit_rate(
         real_ip(context.request.headers["X-Real-IP"]?) ||
         context.request.remote_address)
 
-      if rate_limiter[:allow]
+      if rate_limiter[:allow] || rateExempted
         on_send_money(match[1])
       else
         on_too_many_requests(rate_limiter[:try_again])
@@ -267,7 +308,7 @@ module Cardano
     end
 
     def on_get(context : HTTP::Server::Context) : Response
-      match = context.request.resource.match(%r(/metrics/?$))
+      match = context.request.path.match(%r(/metrics/?$))
       return on_not_found unless match
 
       on_metrics
@@ -434,7 +475,7 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
     status_and_body = faucet.on_request(context)
     context.response.status = status_and_body[:status]
     if context.request.method == "GET" \
-       && context.request.resource.match(%r(/metrics/?$)) \
+       && context.request.path.match(%r(/metrics/?$)) \
        && context.response.status == HTTP::Status::OK
       context.response.print(status_and_body[:body])
     else
@@ -451,6 +492,7 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
   LOG.debug("FAUCET_WALLET_ID_PATH: #{FAUCET_WALLET_ID_PATH}")
   LOG.debug("FAUCET_WALLET_ID: #{FAUCET_WALLET_ID}")
   LOG.debug("FAUCET_PASSPHRASE_PATH: #{FAUCET_PASSPHRASE_PATH}")
+  LOG.debug("FAUCET_API_KEY_PATH: #{FAUCET_API_KEY_PATH}")
   LOG.debug("WALLET_LISTEN_PORT: #{WALLET_LISTEN_PORT}")
   LOG.debug("WALLET_API: #{WALLET_API}")
   LOG.debug("LOVELACES_TO_GIVE: #{LOVELACES_TO_GIVE}")

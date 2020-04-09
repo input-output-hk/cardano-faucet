@@ -57,6 +57,12 @@ in {
       description = "The default path to the faucet passphrase file.";
     };
 
+    faucetApiKeyPath = mkOption {
+      type = types.str;
+      default = "/var/lib/keys/faucet.apikey";
+      description = "The default path to the faucet api key file.";
+    };
+
     walletApi = mkOption {
       type = types.str;
       default = "http://localhost:8090/v2";

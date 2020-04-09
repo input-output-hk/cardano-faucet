@@ -106,6 +106,7 @@ in {
         FAUCET_LISTEN_PORT = toString cfg.faucetListenPort;
         FAUCET_SECRET_MNEMONIC_PATH = "/var/lib/cardano-faucet/faucet.mnemonic";
         FAUCET_SECRET_PASSPHRASE_PATH = "/var/lib/cardano-faucet/faucet.passphrase";
+        FAUCET_API_KEY_PATH = "/var/lib/cardano-faucet/faucet.apikey";
         WALLET_API = cfg.walletApi;
         WALLET_LISTEN_PORT = toString cfg.walletListenPort;
         LOVELACES_TO_GIVE = toString cfg.lovelacesToGive;
@@ -122,6 +123,10 @@ in {
         if ! [ -s faucet.passphrase ]; then
           cp ${cfg.faucetSecretPassphrasePath} faucet.passphrase
           chmod 0400 faucet.passphrase
+        fi
+        if ! [ -s faucet.apikey ]; then
+          cp ${cfg.faucetApiKeyPath} faucet.apikey
+          chmod 0400 faucet.apikey
         fi
         if ! [ -s faucet.id ]; then
           ${defaultPackages.create-faucet-wallet} -m ./faucet.mnemonic -p ./faucet.passphrase
