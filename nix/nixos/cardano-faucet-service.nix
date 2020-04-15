@@ -9,7 +9,7 @@ let
   defaultPkgs = (import ../. {}).pkgs;
 in {
   imports = [
-    (sources.cardano-node + "/nix/nixos")
+    ./cardano-faucet-options.nix
   ];
 
   options.services.cardano-faucet.enable = mkOption {
