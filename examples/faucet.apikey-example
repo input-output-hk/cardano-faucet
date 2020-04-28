@@ -8,6 +8,9 @@
 # The parameter key-value pair to submit is `apiKey=$KEY`, such as:
 #   curl -XPOST https://FQDN/send-money/$ADDRESS?apiKey=$KEY
 #
+# API keys can be generated with:
+#   tr -cd 'A-Za-z0-9' < /dev/urandom | head -c 32
+#
 # Example formatting below:
 
 kRl9TACrYmXaPKQ5sRm8on2lB7Pi03aG DevOps
