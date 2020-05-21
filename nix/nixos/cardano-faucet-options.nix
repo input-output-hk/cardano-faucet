@@ -8,7 +8,7 @@ in {
   options.services.cardano-faucet = {
     package = mkOption {
       type = types.package;
-      default = (import ../. {}).packages.cardano-faucet-cr;
+      default = (import ../. {}).packages.cardano-faucet;
       defaultText = "cardano-faucet";
       description = ''
         The cardano-faucet package to be used
@@ -31,11 +31,11 @@ in {
     };
 
     faucetLogLevel = mkOption {
-      type = types.enum [ "UNKNOWN" "DEBUG" "INFO" "WARN" "ERROR" "FATAL" ];
+      type = types.enum [ "DEBUG" "VERBOSE" "INFO" "WARNING" "ERROR" "FATAL" "NONE" ];
       default = "INFO";
       description = ''
         The log level for the cardano faucet service. Valid levels are:
-        UNKNOWN DEBUG INFO WARN ERROR FATAL.
+        DEBUG VERBOSE INFO WARNING ERROR FATAL NONE
       '';
     };
 

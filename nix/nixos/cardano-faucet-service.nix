@@ -101,7 +101,8 @@ in {
       };
 
       environment = {
-        FAUCET_LOG_LEVEL = cfg.faucetLogLevel;
+        CRYSTAL_LOG_LEVEL = cfg.faucetLogLevel;
+        CRYSTAL_LOG_SOURCES = "*";
         FAUCET_WALLET_ID_PATH = cfg.faucetWalletIdPath;
         FAUCET_LISTEN_PORT = toString cfg.faucetListenPort;
         FAUCET_SECRET_MNEMONIC_PATH = "/var/lib/cardano-faucet/faucet.mnemonic";

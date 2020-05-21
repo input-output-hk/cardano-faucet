@@ -1,8 +1,11 @@
 { sources ? import ./sources.nix }:
-with {
+let
+  crystalPkgs = import sources.nixpkgs-crystal {};
+in with {
   overlay = self: super: {
     inherit (import sources.niv { }) niv;
-    crystal = (import sources.nixpkgs-crystal {}).crystal.overrideAttrs(_: { doCheck = false; });
+    inherit (crystalPkgs) crystal2nix expect jq pkg-config openssl shards;
+    crystal = crystalPkgs.crystal_0_34;
     inherit (import sources.cardano-wallet { gitrev = sources.cardano-wallet.rev; }) cardano-wallet-byron;
     packages = self.callPackages ./packages.nix { };
     inherit (import sources.gitignore { inherit (self) lib; }) gitignoreSource;
