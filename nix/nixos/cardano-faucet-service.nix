@@ -88,7 +88,7 @@ in {
       startLimitIntervalSec = 0;
 
       script = ''
-        ${cfg.package}/bin/server
+        ${cfg.package}/bin/cardano-faucet
       '';
 
       serviceConfig = {
