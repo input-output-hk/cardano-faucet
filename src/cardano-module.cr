@@ -77,11 +77,11 @@ module Cardano
   end
 
   class Fees
-    def self.for_tx(wallet, dest_addr)
-      # fees = JSON.parse(`cardano-wallet-byron transaction fees #{wallet} --payment #{LOVELACES_TO_GIVE}@#{dest_addr}`)["amount"]["quantity"].as_i
+    def self.for_tx(wallet, dest_addr, amount)
+      # fees = JSON.parse(`cardano-wallet-byron transaction fees #{wallet} --payment #{amount}@#{dest_addr}`)["amount"]["quantity"].as_i
 
       path = "#{WALLET_API}/byron-wallets/#{wallet}/payment-fees"
-      body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{LOVELACES_TO_GIVE_ANON},"unit":"lovelace"}}]})
+      body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
       Log.debug { "Fetching transaction fee estimate; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
@@ -118,13 +118,12 @@ module Cardano
     alias RateLimitResult = {statusCode: Int32, error: String, message: String, retryAfter: Time}
     alias NotFoundResult = {statusCode: Int32, error: String, message: String}
 
-    @amount : UInt64
     @settings : Settings
     @db : DB::Database
     @lastMetricsTime : Time
     @lastMetrics : String
 
-    def initialize(@amount, @db)
+    def initialize(@db)
       @settings = Settings.get
       @db.scalar "PRAGMA journal_mode=WAL"
       @lastMetricsTime = Time.utc
@@ -199,6 +198,18 @@ module Cardano
       }
     end
 
+    def no_anon_access
+      msg = {statusCode: 403,
+             error:      "Forbidden",
+             message:    "Anonymous Access Not Allowed: please authenticate by apiKey",
+      }
+      Log.debug { msg.to_json }
+      {
+        status: HTTP::Status::FORBIDDEN,
+        body:   msg,
+      }
+    end
+
     def on_post(context : HTTP::Server::Context) : Response
       rateExempted = false
 
@@ -213,12 +224,20 @@ module Cardano
         end
       end
 
+      if !ANONYMOUS_ACCESS && !rateExempted
+        return no_anon_access
+      end
+
       rate_limiter = limit_rate(
         real_ip(context.request.headers["X-Real-IP"]?) ||
         context.request.remote_address)
 
       if rate_limiter[:allow] || rateExempted
-        on_send_money(match[1])
+        if rateExempted
+          on_send_money(match[1], LOVELACES_TO_GIVE_APIKEY)
+        else
+          on_send_money(match[1], LOVELACES_TO_GIVE_ANON)
+        end
       else
         on_too_many_requests(rate_limiter[:try_again])
       end
@@ -249,8 +268,8 @@ module Cardano
       }
     end
 
-    def on_send_money(to_address : String) : Response
-      result = send_funds(to_address)
+    def on_send_money(to_address : String, amount : UInt64) : Response
+      result = send_funds(to_address, amount)
       {
         status: HTTP::Status::OK,
         body:   result,
@@ -338,7 +357,7 @@ module Cardano
       result.strip
     end
 
-    def send_funds(address : String) : SendFundsResult
+    def send_funds(address : String, amount : UInt64) : SendFundsResult
       digest = OpenSSL::Digest.new("SHA256")
       digest.update([
         address,
@@ -347,8 +366,8 @@ module Cardano
         @settings.genesis_block_hash,
       ].join)
 
-      tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address)
-      amount_with_fees = @amount + tx_fees
+      tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount)
+      amount_with_fees = amount + tx_fees
 
       source_account_value = Account.for_wallet(FAUCET_WALLET_ID)
       source_tx_counter = Txs.for_wallet(FAUCET_WALLET_ID)
@@ -361,7 +380,7 @@ module Cardano
       end
 
       path = "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions"
-      body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{@amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
+      body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
       Log.debug { "Performing send; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
@@ -374,7 +393,7 @@ module Cardano
       Log.info { "The id for this funds transfer transaction is: #{id}" }
       msg = {
         success: response[0].success?,
-        amount:  @amount,
+        amount:  amount,
         fee:     tx_fees,
         txid:    id,
       }

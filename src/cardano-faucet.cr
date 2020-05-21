@@ -17,7 +17,7 @@ require "./general.cr"
 require "./cardano-module.cr"
 
 DB.open "sqlite3://last-seen.sqlite" do |db|
-  faucet = Cardano::Faucet.new(LOVELACES_TO_GIVE_ANON, db)
+  faucet = Cardano::Faucet.new(db)
   middleware = [HTTP::ErrorHandler.new, HTTP::LogHandler.new]
   server = HTTP::Server.new(middleware) do |context|
     context.response.content_type = "application/json"
