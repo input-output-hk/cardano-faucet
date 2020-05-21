@@ -7,49 +7,33 @@ require "json"
 require "file_utils"
 require "db"
 require "sqlite3"
-require "logger"
+require "log"
 
-FAUCET_LOG_LEVEL              = ENV.fetch("FAUCET_LOG_LEVEL", "INFO")
-FAUCET_LISTEN_PORT            = ENV.fetch("FAUCET_LISTEN_PORT", "8091").to_i
-FAUCET_WALLET_ID_PATH         = ENV.fetch("FAUCET_WALLET_ID_PATH", "/var/lib/cardano-faucet/faucet.id")
-FAUCET_PASSPHRASE_PATH        = ENV.fetch("FAUCET_SECRET_PASSPHRASE_PATH", "/var/lib/cardano-faucet/faucet.passphrase")
-FAUCET_API_KEY_PATH           = ENV.fetch("FAUCET_API_KEY_PATH", "/var/lib/cardano-faucet/faucet.apikey")
-WALLET_LISTEN_PORT            = ENV.fetch("WALLET_LISTEN_PORT", "8090").to_i
-WALLET_API                    = ENV.fetch("WALLET_API", "http://localhost:#{WALLET_LISTEN_PORT}/v2")
-LOVELACES_TO_GIVE             = ENV.fetch("LOVELACES_TO_GIVE", "1000000000").to_u64
-SECONDS_BETWEEN_REQUESTS      = ENV.fetch("SECONDS_BETWEEN_REQUESTS", "86400").to_i
+FAUCET_LOG_LEVEL         = ENV.fetch("CRYSTAL_LOG_LEVEL", "INFO")
+FAUCET_LOG_SOURCES       = ENV.fetch("CRYSTAL_LOG_SOURCES", "*")
+FAUCET_LISTEN_PORT       = ENV.fetch("FAUCET_LISTEN_PORT", "8091").to_i
+FAUCET_WALLET_ID_PATH    = ENV.fetch("FAUCET_WALLET_ID_PATH", "/var/lib/cardano-faucet/faucet.id")
+FAUCET_PASSPHRASE_PATH   = ENV.fetch("FAUCET_SECRET_PASSPHRASE_PATH", "/var/lib/cardano-faucet/faucet.passphrase")
+FAUCET_API_KEY_PATH      = ENV.fetch("FAUCET_API_KEY_PATH", "/var/lib/cardano-faucet/faucet.apikey")
+WALLET_LISTEN_PORT       = ENV.fetch("WALLET_LISTEN_PORT", "8090").to_i
+WALLET_API               = ENV.fetch("WALLET_API", "http://localhost:#{WALLET_LISTEN_PORT}/v2")
+LOVELACES_TO_GIVE        = ENV.fetch("LOVELACES_TO_GIVE", "1000000000").to_u64
+SECONDS_BETWEEN_REQUESTS = ENV.fetch("SECONDS_BETWEEN_REQUESTS", "86400").to_i
 
 STDOUT.sync = true
-LOG = Logger.new(STDOUT)
-case FAUCET_LOG_LEVEL
-  when "FATAL"
-    LOG.level = Logger::FATAL
-  when "ERROR"
-    LOG.level = Logger::ERROR
-  when "WARN"
-    LOG.level = Logger::WARN
-  when "INFO"
-    LOG.level = Logger::INFO
-  when "DEBUG"
-    LOG.level = Logger::DEBUG
-  when "UNKNOWN"
-    LOG.level = Logger::UNKNOWN
-  else
-    raise "Unknown log level: #{FAUCET_LOG_LEVEL}"
-end
+Log.setup_from_env
 
-FAUCET_WALLET_ID              = readFile(FAUCET_WALLET_ID_PATH)
-SECRET_PASSPHRASE             = readFile(FAUCET_PASSPHRASE_PATH)
-API_KEYS                      = readKeys(FAUCET_API_KEY_PATH)
+FAUCET_WALLET_ID  = readFile(FAUCET_WALLET_ID_PATH)
+SECRET_PASSPHRASE = readFile(FAUCET_PASSPHRASE_PATH)
+API_KEYS          = readKeys(FAUCET_API_KEY_PATH)
 
-API_KEY_LEN                   = 32
-API_KEY_COMMENT_MAX_LEN       = 64
+API_KEY_LEN             = 32
+API_KEY_COMMENT_MAX_LEN = 64
 
-API_URI                       = URI.parse("#{WALLET_API}")
-HEADERS                       = HTTP::Headers{ "Content-Type" => "application/json; charset=utf-8" }
+API_URI = URI.parse("#{WALLET_API}")
+HEADERS = HTTP::Headers{"Content-Type" => "application/json; charset=utf-8"}
 
-MIN_METRICS_PERIOD            = 10
-
+MIN_METRICS_PERIOD = 10
 
 def readFile(file)
   if (File.exists?(file) && !File.empty?(file))
@@ -71,7 +55,7 @@ def readKeys(file)
       if !(keyFields[0] =~ /^[A-Za-z0-9]{#{API_KEY_LEN}}$/)
         msg = "API Key file \"#{file}\", line \"#{c + 1}\", key \"#{keyFields[0]}\" " \
               "is not a #{API_KEY_LEN} char alphanumeric"
-        LOG.error(msg)
+        Log.error { msg }
         raise(msg)
       end
       if keyFields.size == 1
@@ -85,7 +69,6 @@ def readKeys(file)
 end
 
 module Cardano
-
   class Wallet
     def self.apiPost(path, body)
       client = HTTP::Client.new(API_URI)
@@ -93,17 +76,17 @@ module Cardano
         result = response.body_io.gets
         statusCode = response.status_code
         statusMessage = response.status_message
-        LOG.debug("response: #{response}")
+        Log.debug { "response: #{response}" }
         if response.success?
-          LOG.debug("statusCode: #{statusCode}")
-          LOG.debug("statusMessage: #{statusMessage}")
-          LOG.debug("Result: #{result}")
+          Log.debug { "statusCode: #{statusCode}" }
+          Log.debug { "statusMessage: #{statusMessage}" }
+          Log.debug { "Result: #{result}" }
         else
-          LOG.error("statusCode: #{statusCode}")
-          LOG.error("statusMessage: #{statusMessage}")
-          LOG.error("Result: #{result}")
+          Log.error { "statusCode: #{statusCode}" }
+          Log.error { "statusMessage: #{statusMessage}" }
+          Log.error { "Result: #{result}" }
         end
-        return { response, result }
+        return {response, result}
       end
     end
 
@@ -113,28 +96,28 @@ module Cardano
         result = response.body_io.gets
         statusCode = response.status_code
         statusMessage = response.status_message
-        LOG.debug("response: #{response}")
+        Log.debug { "response: #{response}" }
         if response.success?
-          LOG.debug("statusCode: #{statusCode}")
-          LOG.debug("statusMessage: #{statusMessage}")
-          LOG.debug("Result: #{result}")
+          Log.debug { "statusCode: #{statusCode}" }
+          Log.debug { "statusMessage: #{statusMessage}" }
+          Log.debug { "Result: #{result}" }
         else
-          LOG.error("statusCode: #{statusCode}")
-          LOG.error("statusMessage: #{statusMessage}")
-          LOG.error("Result: #{result}")
+          Log.error { "statusCode: #{statusCode}" }
+          Log.error { "statusMessage: #{statusMessage}" }
+          Log.error { "Result: #{result}" }
         end
-        return { response, result }
+        return {response, result}
       end
     end
   end
 
   class Account
     def self.for_wallet(wallet)
-      #value = JSON.parse(`cardano-wallet-byron wallet get #{wallet}`)["balance"]["available"]["quantity"].as_i64
+      # value = JSON.parse(`cardano-wallet-byron wallet get #{wallet}`)["balance"]["available"]["quantity"].as_i64
 
       path = "#{WALLET_API}/byron-wallets/#{wallet}"
-      LOG.debug("Fetching available wallet value; curl equivalent:")
-      LOG.debug("curl -v #{path}")
+      Log.debug { "Fetching available wallet value; curl equivalent:" }
+      Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
       value = 0
       if response[0].success?
@@ -146,11 +129,11 @@ module Cardano
 
   class Txs
     def self.for_wallet(wallet)
-      #counter = JSON.parse(`cardano-wallet-byron transaction list #{wallet}`)
+      # counter = JSON.parse(`cardano-wallet-byron transaction list #{wallet}`)
 
       path = "#{WALLET_API}/byron-wallets/#{wallet}/transactions"
-      LOG.debug("Fetching wallet transaction count; curl equivalent:")
-      LOG.debug("curl -v #{path} | jq '. | length'")
+      Log.debug { "Fetching wallet transaction count; curl equivalent:" }
+      Log.debug { "curl -v #{path} | jq '. | length'" }
       response = Wallet.apiGet(path)
       if response[0].success?
         counter = JSON.parse(response[1].not_nil!)
@@ -165,8 +148,8 @@ module Cardano
 
       path = "#{WALLET_API}/byron-wallets/#{wallet}/payment-fees"
       body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{LOVELACES_TO_GIVE},"unit":"lovelace"}}]})
-      LOG.debug("Fetching transaction fee estimate; curl equivalent:")
-      LOG.debug("curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1")
+      Log.debug { "Fetching transaction fee estimate; curl equivalent:" }
+      Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
       fees = 0
       if response[0].success?
@@ -182,11 +165,11 @@ module Cardano
     )
 
     def self.get
-      #from_json(`cardano-wallet-byron network parameters latest`)
+      # from_json(`cardano-wallet-byron network parameters latest`)
 
       path = "#{WALLET_API}/network/parameters/latest"
-      LOG.debug("Fetching network parameters; curl equivalent:")
-      LOG.debug("curl -v #{path}")
+      Log.debug { "Fetching network parameters; curl equivalent:" }
+      Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
       from_json(response[1].not_nil!)
     end
@@ -259,26 +242,26 @@ module Cardano
     end
 
     def on_error(error)
-      msg = { statusCode: 500,
-              error:      HTTP::Status::INTERNAL_SERVER_ERROR.to_s,
-              message:    error.to_s,
-            }
-      LOG.debug(msg.to_json)
+      msg = {statusCode: 500,
+             error:      HTTP::Status::INTERNAL_SERVER_ERROR.to_s,
+             message:    error.to_s,
+      }
+      Log.debug { msg.to_json }
       {
         status: HTTP::Status::INTERNAL_SERVER_ERROR,
-        body:   msg
+        body:   msg,
       }
     end
 
     def on_not_found
-      msg = { statusCode: 404,
-              error:      "Not Found",
-              message:    "No URL found"
-            }
-      LOG.debug(msg.to_json)
+      msg = {statusCode: 404,
+             error:      "Not Found",
+             message:    "No URL found",
+      }
+      Log.debug { msg.to_json }
       {
         status: HTTP::Status::NOT_FOUND,
-        body:   msg
+        body:   msg,
       }
     end
 
@@ -291,8 +274,8 @@ module Cardano
       if context.request.query_params.has_key?("apiKey")
         if API_KEYS.has_key? context.request.query_params["apiKey"]
           rateExempted = true
-          LOG.debug("Rate exempted by API key with comment: " \
-                    "\"#{API_KEYS[context.request.query_params["apiKey"]]}\"")
+          Log.debug { "Rate exempted by API key with comment: " \
+                      "\"#{API_KEYS[context.request.query_params["apiKey"]]}\"" }
         end
       end
 
@@ -323,12 +306,12 @@ module Cardano
         @lastMetricsTime = now
         @lastMetrics = "cardano_faucet_metrics_value_available #{result}"
       else
-        LOG.debug("Metrics were fetched #{@lastMetricsTime} with a refresh period \
-                   of #{MIN_METRICS_PERIOD}s; serving previous result...")
+        Log.debug { "Metrics were fetched #{@lastMetricsTime} with a refresh period \
+                   of #{MIN_METRICS_PERIOD}s; serving previous result..." }
       end
       {
-        status:  HTTP::Status::OK,
-        body:    @lastMetrics,
+        status: HTTP::Status::OK,
+        body:   @lastMetrics,
       }
     end
 
@@ -342,15 +325,15 @@ module Cardano
 
     def on_too_many_requests(try_again : Time) : Response
       delta = (try_again - Time.utc).total_seconds.to_i
-      msg = { statusCode: 429,
-              error:      "Too Many Requests",
-              message:    "Try again in #{delta} seconds",
-              retryAfter: try_again.to_utc
-            }
-      LOG.debug(msg.to_json)
+      msg = {statusCode: 429,
+             error:      "Too Many Requests",
+             message:    "Try again in #{delta} seconds",
+             retryAfter: try_again.to_utc,
+      }
+      Log.debug { msg.to_json }
       {
         status: HTTP::Status::TOO_MANY_REQUESTS,
-        body:   msg
+        body:   msg,
       }
     end
 
@@ -436,17 +419,17 @@ module Cardano
       source_account_value = Account.for_wallet(FAUCET_WALLET_ID)
       source_tx_counter = Txs.for_wallet(FAUCET_WALLET_ID)
 
-      LOG.info("The transaction will be posted to the blockchain with genesis hash: #{@settings.genesis_block_hash}")
+      Log.info { "The transaction will be posted to the blockchain with genesis hash: #{@settings.genesis_block_hash}" }
 
       if source_account_value < amount_with_fees
-          LOG.error("Not enough funds in faucet account, only #{source_account_value} left")
-          raise "Not enough funds in faucet account, only #{source_account_value} left"
+        Log.error { "Not enough funds in faucet account, only #{source_account_value} left" }
+        raise "Not enough funds in faucet account, only #{source_account_value} left"
       end
 
       path = "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions"
       body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{@amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
-      LOG.debug("Performing send; curl equivalent:")
-      LOG.debug("curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1")
+      Log.debug { "Performing send; curl equivalent:" }
+      Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
       id = "ERROR"
       if response[0].success?
@@ -454,14 +437,14 @@ module Cardano
         id = JSON.parse(result.not_nil!)["id"].as_s
       end
 
-      LOG.info("The id for this funds transfer transaction is: #{id}")
+      Log.info { "The id for this funds transfer transaction is: #{id}" }
       msg = {
         success: response[0].success?,
         amount:  @amount,
         fee:     tx_fees,
         txid:    id,
       }
-      LOG.info(msg.to_json)
+      Log.info { msg.to_json }
       msg
     end
   end
@@ -474,9 +457,7 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
     context.response.content_type = "application/json"
     status_and_body = faucet.on_request(context)
     context.response.status = status_and_body[:status]
-    if context.request.method == "GET" \
-       && context.request.path.match(%r(/metrics/?$)) \
-       && context.response.status == HTTP::Status::OK
+    if context.request.method == "GET" && context.request.path.match(%r(/metrics/?$)) && context.response.status == HTTP::Status::OK
       context.response.print(status_and_body[:body])
     else
       context.response.print(status_and_body[:body].to_json)
@@ -485,18 +466,18 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
 
   address = server.bind_tcp(FAUCET_LISTEN_PORT)
 
-  LOG.info("Listening on http://#{address}")
+  Log.info { "Listening on http://#{address}" }
 
-  LOG.debug("FAUCET_LOG_LEVEL: #{FAUCET_LOG_LEVEL}")
-  LOG.debug("FAUCET_LISTEN_PORT: #{FAUCET_LISTEN_PORT}")
-  LOG.debug("FAUCET_WALLET_ID_PATH: #{FAUCET_WALLET_ID_PATH}")
-  LOG.debug("FAUCET_WALLET_ID: #{FAUCET_WALLET_ID}")
-  LOG.debug("FAUCET_PASSPHRASE_PATH: #{FAUCET_PASSPHRASE_PATH}")
-  LOG.debug("FAUCET_API_KEY_PATH: #{FAUCET_API_KEY_PATH}")
-  LOG.debug("WALLET_LISTEN_PORT: #{WALLET_LISTEN_PORT}")
-  LOG.debug("WALLET_API: #{WALLET_API}")
-  LOG.debug("LOVELACES_TO_GIVE: #{LOVELACES_TO_GIVE}")
-  LOG.debug("SECONDS_BETWEEN_REQUESTS: #{SECONDS_BETWEEN_REQUESTS}")
+  Log.debug { "FAUCET_LOG_LEVEL: #{FAUCET_LOG_LEVEL}" }
+  Log.debug { "FAUCET_LISTEN_PORT: #{FAUCET_LISTEN_PORT}" }
+  Log.debug { "FAUCET_WALLET_ID_PATH: #{FAUCET_WALLET_ID_PATH}" }
+  Log.debug { "FAUCET_WALLET_ID: #{FAUCET_WALLET_ID}" }
+  Log.debug { "FAUCET_PASSPHRASE_PATH: #{FAUCET_PASSPHRASE_PATH}" }
+  Log.debug { "FAUCET_API_KEY_PATH: #{FAUCET_API_KEY_PATH}" }
+  Log.debug { "WALLET_LISTEN_PORT: #{WALLET_LISTEN_PORT}" }
+  Log.debug { "WALLET_API: #{WALLET_API}" }
+  Log.debug { "LOVELACES_TO_GIVE: #{LOVELACES_TO_GIVE}" }
+  Log.debug { "SECONDS_BETWEEN_REQUESTS: #{SECONDS_BETWEEN_REQUESTS}" }
 
   server.listen
 end

@@ -1,7 +1,6 @@
 with { pkgs = import ./nix { }; };
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    cacert
     cardano-wallet-byron
     crystal
     crystal2nix
@@ -9,6 +8,8 @@ pkgs.mkShell {
     niv
     jq
     shards
+    pkg-config
+    openssl
     (lowPrio sqlite)
     sqliteInteractive
   ];

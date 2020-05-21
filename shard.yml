@@ -2,8 +2,8 @@ name: cardano-faucet
 version: 0.1.0
 
 authors:
-  - Michael Fellinger <michael.fellinger@iohk.io>
   - John Lotoski <john.lotoski@iohk.io>
+  - Michael Fellinger <michael.fellinger@iohk.io>
 
 targets:
   cardano-faucet:
@@ -13,6 +13,6 @@ dependencies:
   sqlite3:
     github: crystal-lang/crystal-sqlite3
 
-crystal: 0.30.1
+crystal: 0.34.0
 
 license: MIT
