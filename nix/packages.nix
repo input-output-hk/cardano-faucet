@@ -31,7 +31,7 @@ in {
       name = "cardano-faucet";
     };
     format = "shards";
-    crystalBinaries.server.src = "src/cardano-faucet.cr";
+    crystalBinaries.cardano-faucet.src = "src/cardano-faucet.cr";
     shardsFile = ../shards.nix;
     buildInputs = [ pkg-config openssl sqlite ];
     doCheck = false;
