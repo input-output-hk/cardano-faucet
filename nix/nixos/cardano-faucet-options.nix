@@ -1,17 +1,18 @@
 { config, lib, pkgs, ... }:
 
 let
+  sources = import ../sources.nix;
   cardano-faucet = (import ../. { }).packages.cardano-faucet;
+  iohkNix = import sources.iohk-nix {};
   cfg = config.services.cardano-faucet;
   inherit (lib) mkOption types;
 in {
   options.services.cardano-faucet = {
-    package = mkOption {
-      type = types.package;
-      default = (import ../. {}).packages.cardano-faucet;
-      defaultText = "cardano-faucet";
+    anonymousAccess = mkOption {
+      type = types.bool;
+      default = true;
       description = ''
-        The cardano-faucet package to be used
+        Whether to allow anonymous access to the faucet, or force the use of an API key.
       '';
     };
 
@@ -63,6 +64,37 @@ in {
       description = "The default path to the faucet api key file.";
     };
 
+    lovelacesToGiveAnonymous = mkOption {
+      type = types.int;
+      default = 1000000000;
+      description = ''
+        The default quantity of lovelaces to send per faucet transaction for an anonymous request.
+      '';
+    };
+
+    lovelacesToGiveApiKeyAuth = mkOption {
+      type = types.int;
+      default = 1000000000;
+      description = ''
+        The default quantity of lovelaces to send per faucet transaction for an API key authenticated request.
+      '';
+    };
+
+    package = mkOption {
+      type = types.package;
+      default = (import ../. {}).packages.cardano-faucet;
+      defaultText = "cardano-faucet";
+      description = ''
+        The cardano-faucet package to be used
+      '';
+    };
+
+    useByronWallet = mkOption {
+      type = types.bool;
+      default = iohkNix.cardanoLib.environments."${cfg.cardanoEnv}".useByronWallet;
+      description = "Whether to use a Byron wallet or a Shelley wallet for faucet funding operations/APIs.";
+    };
+
     walletApi = mkOption {
       type = types.str;
       default = "http://localhost:8090/v2";
@@ -79,12 +111,6 @@ in {
       type = types.package;
       default = (import ../. {}).pkgs.cardano-wallet-byron;
       description = "Package for the cardano wallet executable.";
-    };
-
-    lovelacesToGive = mkOption {
-      type = types.int;
-      default = 1000000000;
-      description = "The default quantity of lovelaces to send per faucet transaction.";
     };
 
     secondsBetweenRequests = mkOption {
