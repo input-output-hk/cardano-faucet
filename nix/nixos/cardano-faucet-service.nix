@@ -101,17 +101,20 @@ in {
       };
 
       environment = {
+        ANONYMOUS_ACCESS = if cfg.anonymousAccess then "TRUE" else "FALSE";
         CRYSTAL_LOG_LEVEL = cfg.faucetLogLevel;
         CRYSTAL_LOG_SOURCES = "*";
-        FAUCET_WALLET_ID_PATH = cfg.faucetWalletIdPath;
+        FAUCET_API_KEY_PATH = "/var/lib/cardano-faucet/faucet.apikey";
         FAUCET_LISTEN_PORT = toString cfg.faucetListenPort;
         FAUCET_SECRET_MNEMONIC_PATH = "/var/lib/cardano-faucet/faucet.mnemonic";
         FAUCET_SECRET_PASSPHRASE_PATH = "/var/lib/cardano-faucet/faucet.passphrase";
-        FAUCET_API_KEY_PATH = "/var/lib/cardano-faucet/faucet.apikey";
+        FAUCET_WALLET_ID_PATH = cfg.faucetWalletIdPath;
+        LOVELACES_TO_GIVE_ANON = toString cfg.lovelacesToGiveAnonymous;
+        LOVELACES_TO_GIVE_APIKEY = toString cfg.lovelacesToGiveApiKeyAuth;
+        SECONDS_BETWEEN_REQUESTS = toString cfg.secondsBetweenRequests;
+        USE_BYRON_WALLET = if cfg.useByronWallet then "TRUE" else "FALSE";
         WALLET_API = cfg.walletApi;
         WALLET_LISTEN_PORT = toString cfg.walletListenPort;
-        LOVELACES_TO_GIVE = toString cfg.lovelacesToGive;
-        SECONDS_BETWEEN_REQUESTS = toString cfg.secondsBetweenRequests;
       };
 
       preStart = ''

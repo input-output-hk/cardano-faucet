@@ -9,16 +9,19 @@ require "db"
 require "sqlite3"
 require "log"
 
+ANONYMOUS_ACCESS         = ENV.fetch("ANONYMOUS_ACCESS", "TRUE")
+FAUCET_API_KEY_PATH      = ENV.fetch("FAUCET_API_KEY_PATH", "/var/lib/cardano-faucet/faucet.apikey")
 FAUCET_LOG_LEVEL         = ENV.fetch("CRYSTAL_LOG_LEVEL", "INFO")
 FAUCET_LOG_SOURCES       = ENV.fetch("CRYSTAL_LOG_SOURCES", "*")
 FAUCET_LISTEN_PORT       = ENV.fetch("FAUCET_LISTEN_PORT", "8091").to_i
-FAUCET_WALLET_ID_PATH    = ENV.fetch("FAUCET_WALLET_ID_PATH", "/var/lib/cardano-faucet/faucet.id")
 FAUCET_PASSPHRASE_PATH   = ENV.fetch("FAUCET_SECRET_PASSPHRASE_PATH", "/var/lib/cardano-faucet/faucet.passphrase")
-FAUCET_API_KEY_PATH      = ENV.fetch("FAUCET_API_KEY_PATH", "/var/lib/cardano-faucet/faucet.apikey")
+FAUCET_WALLET_ID_PATH    = ENV.fetch("FAUCET_WALLET_ID_PATH", "/var/lib/cardano-faucet/faucet.id")
+LOVELACES_TO_GIVE_ANON   = ENV.fetch("LOVELACES_TO_GIVE_ANON", "1000000000").to_u64
+LOVELACES_TO_GIVE_APIKEY = ENV.fetch("LOVELACES_TO_GIVE_APIKEY", "1000000000").to_u64
+SECONDS_BETWEEN_REQUESTS = ENV.fetch("SECONDS_BETWEEN_REQUESTS", "86400").to_i
+USE_BYRON_WALLET         = ENV.fetch("USE_BYRON_WALLET", "TRUE");
 WALLET_LISTEN_PORT       = ENV.fetch("WALLET_LISTEN_PORT", "8090").to_i
 WALLET_API               = ENV.fetch("WALLET_API", "http://localhost:#{WALLET_LISTEN_PORT}/v2")
-LOVELACES_TO_GIVE        = ENV.fetch("LOVELACES_TO_GIVE", "1000000000").to_u64
-SECONDS_BETWEEN_REQUESTS = ENV.fetch("SECONDS_BETWEEN_REQUESTS", "86400").to_i
 
 STDOUT.sync = true
 Log.setup_from_env
@@ -147,7 +150,7 @@ module Cardano
       # fees = JSON.parse(`cardano-wallet-byron transaction fees #{wallet} --payment #{LOVELACES_TO_GIVE}@#{dest_addr}`)["amount"]["quantity"].as_i
 
       path = "#{WALLET_API}/byron-wallets/#{wallet}/payment-fees"
-      body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{LOVELACES_TO_GIVE},"unit":"lovelace"}}]})
+      body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{LOVELACES_TO_GIVE_ANON},"unit":"lovelace"}}]})
       Log.debug { "Fetching transaction fee estimate; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
@@ -451,7 +454,7 @@ module Cardano
 end
 
 DB.open "sqlite3://last-seen.sqlite" do |db|
-  faucet = Cardano::Faucet.new(LOVELACES_TO_GIVE, db)
+  faucet = Cardano::Faucet.new(LOVELACES_TO_GIVE_ANON, db)
   middleware = [HTTP::ErrorHandler.new, HTTP::LogHandler.new]
   server = HTTP::Server.new(middleware) do |context|
     context.response.content_type = "application/json"
@@ -468,16 +471,19 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
 
   Log.info { "Listening on http://#{address}" }
 
-  Log.debug { "FAUCET_LOG_LEVEL: #{FAUCET_LOG_LEVEL}" }
+  Log.debug { "ANONYMOUS_ACCESS: #{ANONYMOUS_ACCESS}" }
+  Log.debug { "FAUCET_API_KEY_PATH: #{FAUCET_API_KEY_PATH}" }
   Log.debug { "FAUCET_LISTEN_PORT: #{FAUCET_LISTEN_PORT}" }
+  Log.debug { "FAUCET_LOG_LEVEL: #{FAUCET_LOG_LEVEL}" }
+  Log.debug { "FAUCET_PASSPHRASE_PATH: #{FAUCET_PASSPHRASE_PATH}" }
   Log.debug { "FAUCET_WALLET_ID_PATH: #{FAUCET_WALLET_ID_PATH}" }
   Log.debug { "FAUCET_WALLET_ID: #{FAUCET_WALLET_ID}" }
-  Log.debug { "FAUCET_PASSPHRASE_PATH: #{FAUCET_PASSPHRASE_PATH}" }
-  Log.debug { "FAUCET_API_KEY_PATH: #{FAUCET_API_KEY_PATH}" }
-  Log.debug { "WALLET_LISTEN_PORT: #{WALLET_LISTEN_PORT}" }
-  Log.debug { "WALLET_API: #{WALLET_API}" }
-  Log.debug { "LOVELACES_TO_GIVE: #{LOVELACES_TO_GIVE}" }
+  Log.debug { "LOVELACES_TO_GIVE_ANON: #{LOVELACES_TO_GIVE_ANON}" }
+  Log.debug { "LOVELACES_TO_GIVE_APIKEY: #{LOVELACES_TO_GIVE_APIKEY}" }
   Log.debug { "SECONDS_BETWEEN_REQUESTS: #{SECONDS_BETWEEN_REQUESTS}" }
+  Log.debug { "USE_BYRON_WALLET: #{USE_BYRON_WALLET}" }
+  Log.debug { "WALLET_API: #{WALLET_API}" }
+  Log.debug { "WALLET_LISTEN_PORT: #{WALLET_LISTEN_PORT}" }
 
   server.listen
 end
