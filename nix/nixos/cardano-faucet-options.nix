@@ -25,6 +25,18 @@ in {
       '';
     };
 
+    faucetApiKeyPath = mkOption {
+      type = types.str;
+      default = "/var/lib/keys/faucet.apikey";
+      description = "The default path to the faucet api key file.";
+    };
+
+    faucetBasePath = mkOption {
+      type = types.str;
+      default = "/var/lib/cardano-faucet";
+      description = "The default path to the cardano faucet installation.";
+    };
+
     faucetListenPort = mkOption {
       type = types.port;
       default = 8091;
@@ -56,12 +68,6 @@ in {
       type = types.str;
       default = "/var/lib/keys/faucet.passphrase";
       description = "The default path to the faucet passphrase file.";
-    };
-
-    faucetApiKeyPath = mkOption {
-      type = types.str;
-      default = "/var/lib/keys/faucet.apikey";
-      description = "The default path to the faucet api key file.";
     };
 
     lovelacesToGiveAnonymous = mkOption {
@@ -109,7 +115,10 @@ in {
 
     walletPackage = mkOption {
       type = types.package;
-      default = (import ../. {}).pkgs.cardano-wallet-byron;
+      default = if cfg.useByronWallet then
+        (import ../. {}).pkgs.cardano-wallet-byron
+      else
+        (import ../. {}).pkgs.cardano-wallet-shelley;
       description = "Package for the cardano wallet executable.";
     };
 

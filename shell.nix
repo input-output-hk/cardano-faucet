@@ -2,6 +2,8 @@ with { pkgs = import ./nix { }; };
 pkgs.mkShell {
   buildInputs = with pkgs; [
     cardano-wallet-byron
+    cardano-wallet-jormungandr
+    cardano-wallet-shelley
     crystal
     crystal2nix
     expect

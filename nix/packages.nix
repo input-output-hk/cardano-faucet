@@ -2,6 +2,7 @@
 , sqlite
 , crystal
 , cardano-wallet-byron
+, cardano-wallet-shelley
 , jq
 , expect
 , lib
