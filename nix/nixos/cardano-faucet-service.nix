@@ -1,8 +1,8 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.cardano-faucet;
-  inherit (lib) mkOption mkForce types mkIf optionals;
-  inherit (builtins) replaceStrings;
+  inherit (lib) mkForce mkIf mkOption optionals reverseList splitString types;
+  inherit (builtins) head replaceStrings;
   sources = import ../sources.nix;
   iohkNix = import sources.iohk-nix {};
   defaultPackages = (import ../. {}).packages;
@@ -58,7 +58,7 @@ in {
       startLimitIntervalSec = 0;
 
       script = ''
-        ${cfg.walletPackage}/bin/cardano-wallet-byron serve \
+        ${cfg.walletPackage}/bin/cardano-wallet-${if cfg.useByronWallet then "byron" else "shelley"} serve \
           --node-socket ${config.services.cardano-node.socketPath} \
           ${if (cfg.cardanoEnv == "mainnet") then "--mainnet" else "--testnet"} \
             ${if (cfg.cardanoEnv == "selfnode")
@@ -95,19 +95,19 @@ in {
         Restart = "always";
         RestartSec = 10;
         User = "cardano-node";
-        StateDirectory = "cardano-faucet";
-        RuntimeDirectory = "cardano-faucet";
-        WorkingDirectory = "/var/lib/cardano-faucet";
+        StateDirectory = head (reverseList (splitString "/" cfg.faucetBasePath));
+        RuntimeDirectory =  head (reverseList (splitString "/" cfg.faucetBasePath));
+        WorkingDirectory = cfg.faucetBasePath;
       };
 
       environment = {
         ANONYMOUS_ACCESS = if cfg.anonymousAccess then "TRUE" else "FALSE";
         CRYSTAL_LOG_LEVEL = cfg.faucetLogLevel;
         CRYSTAL_LOG_SOURCES = "*";
-        FAUCET_API_KEY_PATH = "/var/lib/cardano-faucet/faucet.apikey";
+        FAUCET_API_KEY_PATH = "${cfg.faucetBasePath}/faucet.apikey";
         FAUCET_LISTEN_PORT = toString cfg.faucetListenPort;
-        FAUCET_SECRET_MNEMONIC_PATH = "/var/lib/cardano-faucet/faucet.mnemonic";
-        FAUCET_SECRET_PASSPHRASE_PATH = "/var/lib/cardano-faucet/faucet.passphrase";
+        FAUCET_SECRET_MNEMONIC_PATH = "${cfg.faucetBasePath}/faucet.mnemonic";
+        FAUCET_SECRET_PASSPHRASE_PATH = "${cfg.faucetBasePath}/faucet.passphrase";
         FAUCET_WALLET_ID_PATH = cfg.faucetWalletIdPath;
         LOVELACES_TO_GIVE_ANON = toString cfg.lovelacesToGiveAnonymous;
         LOVELACES_TO_GIVE_APIKEY = toString cfg.lovelacesToGiveApiKeyAuth;
@@ -118,8 +118,8 @@ in {
       };
 
       preStart = ''
-        mkdir -p /var/lib/cardano-faucet
-        cd /var/lib/cardano-faucet
+        mkdir -p ${cfg.faucetBasePath}
+        cd ${cfg.faucetBasePath}
         if ! [ -s faucet.mnemonic ]; then
           cp ${cfg.faucetSecretMnemonicPath} faucet.mnemonic
           chmod 0400 faucet.mnemonic
@@ -133,11 +133,14 @@ in {
           chmod 0400 faucet.apikey
         fi
         if ! [ -s faucet.id ]; then
-          ${defaultPackages.create-faucet-wallet} -m ./faucet.mnemonic -p ./faucet.passphrase
+          ${defaultPackages.create-faucet-wallet} \
+            -e ${if cfg.useByronWallet then "byron" else "shelley"} \
+            -m ./faucet.mnemonic \
+            -p ./faucet.passphrase
         fi
       '';
 
-      path = with pkgs; [ defaultPkgs.cardano-wallet-byron ];
+      path = [ defaultPkgs.cardano-wallet-byron defaultPkgs.cardano-wallet-shelley ];
     };
   };
 }
