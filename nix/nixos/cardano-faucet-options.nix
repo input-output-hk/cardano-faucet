@@ -52,12 +52,6 @@ in {
       '';
     };
 
-    faucetWalletIdPath = mkOption {
-      type = types.str;
-      default = "/var/lib/cardano-faucet/faucet.id";
-      description = "The default path to the faucet wallet id file.";
-    };
-
     faucetSecretMnemonicPath = mkOption {
       type = types.str;
       default = "/var/lib/keys/faucet.mnemonic";
