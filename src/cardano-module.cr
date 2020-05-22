@@ -46,10 +46,11 @@ module Cardano
   end
 
   class Account
-    def self.for_wallet(wallet)
-      # value = JSON.parse(`cardano-wallet-byron wallet get #{wallet}`)["balance"]["available"]["quantity"].as_i64
+    def self.for_wallet(walletId)
+      # value = JSON.parse(`cardano-wallet-{byron|shelley} wallet get #{walletId}`)["balance"]["available"]["quantity"].as_i64
 
-      path = "#{WALLET_API}/byron-wallets/#{wallet}"
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}"
+                              : "#{WALLET_API}/wallets/#{walletId}"
       Log.debug { "Fetching available wallet value; curl equivalent:" }
       Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
@@ -62,10 +63,11 @@ module Cardano
   end
 
   class Txs
-    def self.for_wallet(wallet)
-      # counter = JSON.parse(`cardano-wallet-byron transaction list #{wallet}`)
+    def self.for_wallet(walletId)
+      # counter = JSON.parse(`cardano-wallet-{byron|shelley} transaction list #{walletId}`)
 
-      path = "#{WALLET_API}/byron-wallets/#{wallet}/transactions"
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/transactions"
+                              : "#{WALLET_API}/wallets/#{walletId}/transactions"
       Log.debug { "Fetching wallet transaction count; curl equivalent:" }
       Log.debug { "curl -v #{path} | jq '. | length'" }
       response = Wallet.apiGet(path)
@@ -77,17 +79,18 @@ module Cardano
   end
 
   class Fees
-    def self.for_tx(wallet, dest_addr, amount)
-      # fees = JSON.parse(`cardano-wallet-byron transaction fees #{wallet} --payment #{amount}@#{dest_addr}`)["amount"]["quantity"].as_i
+    def self.for_tx(walletId, dest_addr, amount)
+      # fees = JSON.parse(`cardano-wallet-{byron|shelley} transaction fees #{walletId} --payment #{amount}@#{dest_addr}`)["amount"]["quantity"].as_i
 
-      path = "#{WALLET_API}/byron-wallets/#{wallet}/payment-fees"
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/payment-fees"
+                              : "#{WALLET_API}/wallets/#{walletId}/payment-fees"
       body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
       Log.debug { "Fetching transaction fee estimate; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
       fees = 0
       if response[0].success?
-        fees = JSON.parse(response[1].not_nil!)["amount"]["quantity"].as_i
+        fees = JSON.parse(response[1].not_nil!)["estimated_min"]["quantity"].as_i
       end
       return fees.not_nil!
     end
@@ -99,7 +102,7 @@ module Cardano
     )
 
     def self.get
-      # from_json(`cardano-wallet-byron network parameters latest`)
+      # from_json(`cardano-wallet-{byron|shelley} network parameters latest`)
 
       path = "#{WALLET_API}/network/parameters/latest"
       Log.debug { "Fetching network parameters; curl equivalent:" }
@@ -198,7 +201,7 @@ module Cardano
       }
     end
 
-    def no_anon_access
+    def on_forbidden
       msg = {statusCode: 403,
              error:      "Forbidden",
              message:    "Anonymous Access Not Allowed: please authenticate by apiKey",
@@ -225,7 +228,7 @@ module Cardano
       end
 
       if !ANONYMOUS_ACCESS && !rateExempted
-        return no_anon_access
+        return on_forbidden
       end
 
       rate_limiter = limit_rate(
@@ -358,19 +361,13 @@ module Cardano
     end
 
     def send_funds(address : String, amount : UInt64) : SendFundsResult
-      digest = OpenSSL::Digest.new("SHA256")
-      digest.update([
-        address,
-        Process.pid,
-        Time.utc,
-        @settings.genesis_block_hash,
-      ].join)
-
       tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount)
       amount_with_fees = amount + tx_fees
 
       source_account_value = Account.for_wallet(FAUCET_WALLET_ID)
-      source_tx_counter = Txs.for_wallet(FAUCET_WALLET_ID)
+
+      # If we want to add a faucet Tx count metric
+      # source_tx_counter = Txs.for_wallet(FAUCET_WALLET_ID)
 
       Log.info { "The transaction will be posted to the blockchain with genesis hash: #{@settings.genesis_block_hash}" }
 
@@ -379,7 +376,8 @@ module Cardano
         raise "Not enough funds in faucet account, only #{source_account_value} left"
       end
 
-      path = "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions"
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions"
+                              : "#{WALLET_API}/wallets/#{FAUCET_WALLET_ID}/transactions"
       body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
       Log.debug { "Performing send; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
