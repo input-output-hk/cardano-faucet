@@ -108,7 +108,7 @@ in {
         FAUCET_LISTEN_PORT = toString cfg.faucetListenPort;
         FAUCET_SECRET_MNEMONIC_PATH = "${cfg.faucetBasePath}/faucet.mnemonic";
         FAUCET_SECRET_PASSPHRASE_PATH = "${cfg.faucetBasePath}/faucet.passphrase";
-        FAUCET_WALLET_ID_PATH = cfg.faucetWalletIdPath;
+        FAUCET_WALLET_ID_PATH = "${cfg.faucetBasePath}/faucet.id";
         LOVELACES_TO_GIVE_ANON = toString cfg.lovelacesToGiveAnonymous;
         LOVELACES_TO_GIVE_APIKEY = toString cfg.lovelacesToGiveApiKeyAuth;
         SECONDS_BETWEEN_REQUESTS = toString cfg.secondsBetweenRequests;
