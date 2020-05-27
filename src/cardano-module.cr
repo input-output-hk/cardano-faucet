@@ -88,9 +88,9 @@ module Cardano
       Log.debug { "Fetching transaction fee estimate; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
-      fees = 0
+      fees = 0_i64
       if response[0].success?
-        fees = JSON.parse(response[1].not_nil!)["estimated_min"]["quantity"].as_i
+        fees = JSON.parse(response[1].not_nil!)["estimated_min"]["quantity"].as_i64
       end
       return fees.not_nil!
     end
@@ -117,7 +117,7 @@ module Cardano
 
     alias Allow = Bool
     alias Response = {status: HTTP::Status, body: SendFundsResult | NotFoundResult | RateLimitResult | String}
-    alias SendFundsResult = {success: Bool, amount: UInt64, fee: Int32, txid: String}
+    alias SendFundsResult = {success: Bool, amount: UInt64, fee: Int64, txid: String}
     alias RateLimitResult = {statusCode: Int32, error: String, message: String, retryAfter: Time}
     alias NotFoundResult = {statusCode: Int32, error: String, message: String}
 
