@@ -376,6 +376,9 @@ module Cardano
       if source_account_value < amount_with_fees
         Log.error { "Not enough funds in faucet account, only #{source_account_value} left" }
         raise "Not enough funds in faucet account, only #{source_account_value} left"
+      else
+        Log.info { "Faucet funds: { \"pre-tx\": \"#{source_account_value}\", " \
+                   "\"post-tx\": \"#{source_account_value - amount_with_fees}\" }" }
       end
 
       path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions"
