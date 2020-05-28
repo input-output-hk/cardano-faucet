@@ -222,7 +222,7 @@ module Cardano
       if context.request.query_params.has_key?("apiKey")
         if API_KEYS.has_key? context.request.query_params["apiKey"]
           rateExempted = true
-          Log.debug { "Rate exempted by API key with comment: " \
+          Log.info { "Rate exempted by API key with comment: " \
                       "\"#{API_KEYS[context.request.query_params["apiKey"]]}\"  " \
                       "IP: #{context.request.remote_address ? context.request.remote_address.to_s : "NA"};  " \
                       "X-Real-IP: #{context.request.headers["X-Real-IP"]? ? context.request.headers["X-Real-IP"].to_s : "NA"}" }
