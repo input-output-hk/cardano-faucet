@@ -102,6 +102,7 @@ in {
 
       environment = {
         ANONYMOUS_ACCESS = if cfg.anonymousAccess then "TRUE" else "FALSE";
+        CARDANO_ENV = cfg.cardanoEnv;
         CRYSTAL_LOG_LEVEL = cfg.faucetLogLevel;
         CRYSTAL_LOG_SOURCES = "*";
         FAUCET_API_KEY_PATH = "${cfg.faucetBasePath}/faucet.apikey";

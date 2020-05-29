@@ -113,7 +113,7 @@ module Cardano
   end
 
   class Faucet
-    TIME_BETWEEN_REQUESTS = SECS_BETWEEN_REQS_ANON.seconds
+    getter settings
 
     alias Allow = Bool
     alias Response = {status: HTTP::Status, body: SendFundsResult | NotFoundResult | RateLimitResult | String}
@@ -214,32 +214,47 @@ module Cardano
     end
 
     def on_post(context : HTTP::Server::Context) : Response
-      rateExempted = false
+      authenticated = false
 
       match = context.request.path.match(%r(/send-money/([^/]+)))
       return on_not_found unless match
 
       if context.request.query_params.has_key?("apiKey")
-        if API_KEYS.has_key? context.request.query_params["apiKey"]
-          rateExempted = true
-          Log.info { "Rate exempted by API key with comment: " \
-                      "\"#{API_KEYS[context.request.query_params["apiKey"]]}\"  " \
-                      "IP: #{context.request.remote_address ? context.request.remote_address.to_s : "NA"};  " \
-                      "X-Real-IP: #{context.request.headers["X-Real-IP"]? ? context.request.headers["X-Real-IP"].to_s : "NA"}" }
+        apiKey = context.request.query_params["apiKey"]
+        if API_KEYS.has_key?(apiKey)
+          authenticated = true
+          timeBetweenRequests = API_KEYS[apiKey][:periodPerTx].as(UInt32).seconds
+        else
+          timeBetweenRequests = SECS_BETWEEN_REQS_ANON.seconds
         end
+      else
+        timeBetweenRequests = SECS_BETWEEN_REQS_ANON.seconds
       end
 
-      if !ANONYMOUS_ACCESS && !rateExempted
+      if authenticated
+        Log.info { "Auth Request:  #{apiKey}  \"#{API_KEYS[apiKey][:comment]}\"  " \
+                    "LOVELACES_PER_TX: #{API_KEYS[apiKey][:lovelacesPerTx]}  " \
+                    "PERIOD_PER_TX: #{API_KEYS[apiKey][:periodPerTx]}  " \
+                    "IP: #{context.request.remote_address || "NA"}  " \
+                    "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
+      else
+        Log.info { "Anon Request:  LOVELACES_PER_TX: #{LOVELACES_TO_GIVE_ANON}  " \
+                    "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ANON}  " \
+                    "IP: #{context.request.remote_address || "NA"}  " \
+                    "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
+      end
+
+      if !ANONYMOUS_ACCESS && !authenticated
         return on_forbidden
       end
 
       rate_limiter = limit_rate(
-        real_ip(context.request.headers["X-Real-IP"]?) ||
-        context.request.remote_address)
+        real_ip(context.request.headers["X-Real-IP"]?) || context.request.remote_address,
+        timeBetweenRequests.as(Time::Span))
 
-      if rate_limiter[:allow] || rateExempted
-        if rateExempted
-          on_send_money(match[1], LOVELACES_TO_GIVE_APIKEY)
+      if rate_limiter[:allow]
+        if authenticated
+          on_send_money(match[1], API_KEYS[apiKey][:lovelacesPerTx].as(UInt64))
         else
           on_send_money(match[1], LOVELACES_TO_GIVE_ANON)
         end
@@ -302,17 +317,17 @@ module Cardano
     def real_ip(header : Nil) : Nil
     end
 
-    def limit_rate(ip : Nil) : NamedTuple(time: Time, allow: Bool, try_again: Time)
+    def limit_rate(ip : Nil, timeBetweenRequests : Time::Span) : NamedTuple(time: Time, allow: Bool, try_again: Time)
       {
         time:      Time.utc,
         allow:     false,
-        try_again: Time.utc + TIME_BETWEEN_REQUESTS,
+        try_again: Time.utc + timeBetweenRequests,
       }
     end
 
-    def limit_rate(remote : String) : NamedTuple(time: Time, allow: Bool, try_again: Time)
+    def limit_rate(remote : String, timeBetweenRequests : Time::Span) : NamedTuple(time: Time, allow: Bool, try_again: Time)
       ip = Socket::IPAddress.parse("tcp://#{remote}").address
-      allow_after = Time.utc - TIME_BETWEEN_REQUESTS
+      allow_after = Time.utc - timeBetweenRequests
 
       found = nil
 
@@ -322,7 +337,7 @@ module Cardano
           found = {
             time:      seen,
             allow:     false,
-            try_again: seen + TIME_BETWEEN_REQUESTS,
+            try_again: seen + timeBetweenRequests,
           }
         end
       end
@@ -371,8 +386,6 @@ module Cardano
       # If we want to add a faucet Tx count metric
       # source_tx_counter = Txs.for_wallet(FAUCET_WALLET_ID)
 
-      Log.info { "The transaction will be posted to the blockchain with genesis hash: #{@settings.genesis_block_hash}" }
-
       if source_account_value < amount_with_fees
         Log.error { "Not enough funds in faucet account, only #{source_account_value} left" }
         raise "Not enough funds in faucet account, only #{source_account_value} left"
@@ -393,7 +406,6 @@ module Cardano
         id = JSON.parse(result.not_nil!)["id"].as_s
       end
 
-      Log.info { "The id for this funds transfer transaction is: #{id}" }
       msg = {
         success: response[0].success?,
         amount:  amount,

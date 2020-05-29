@@ -74,7 +74,7 @@ in {
 
     lovelacesToGiveApiKeyAuth = mkOption {
       type = types.int;
-      default = 1000000000;
+      default = 10000000000;
       description = ''
         The default quantity of lovelaces to send per faucet transaction for an API key authenticated request.
       '';
