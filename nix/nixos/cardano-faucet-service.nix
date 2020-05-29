@@ -111,7 +111,8 @@ in {
         FAUCET_WALLET_ID_PATH = "${cfg.faucetBasePath}/faucet.id";
         LOVELACES_TO_GIVE_ANON = toString cfg.lovelacesToGiveAnonymous;
         LOVELACES_TO_GIVE_APIKEY = toString cfg.lovelacesToGiveApiKeyAuth;
-        SECONDS_BETWEEN_REQUESTS = toString cfg.secondsBetweenRequests;
+        SECS_BETWEEN_REQS_ANON = toString cfg.secondsBetweenRequestsAnonymous;
+        SECS_BETWEEN_REQS_APIKEY = toString cfg.secondsBetweenRequestsApiKeyAuth;
         USE_BYRON_WALLET = if cfg.useByronWallet then "TRUE" else "FALSE";
         WALLET_API = cfg.walletApi;
         WALLET_LISTEN_PORT = toString cfg.walletListenPort;

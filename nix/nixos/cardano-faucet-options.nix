@@ -116,10 +116,16 @@ in {
       description = "Package for the cardano wallet executable.";
     };
 
-    secondsBetweenRequests = mkOption {
+    secondsBetweenRequestsAnonymous = mkOption {
       type = types.int;
       default = 24 * 60 * 60;
-      description = "The default seconds per transactions a user is allowed to make on the faucet.";
+      description = "The default seconds per tx (rate limit) an anonymous user is allowed to make on the faucet.";
+    };
+
+    secondsBetweenRequestsApiKeyAuth = mkOption {
+      type = types.int;
+      default = 0;
+      description = "The default seconds per tx (rate limit) an authenticated user is allowed to make on the faucet.";
     };
   };
 }

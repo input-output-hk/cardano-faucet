@@ -113,7 +113,7 @@ module Cardano
   end
 
   class Faucet
-    TIME_BETWEEN_REQUESTS = SECONDS_BETWEEN_REQUESTS.seconds
+    TIME_BETWEEN_REQUESTS = SECS_BETWEEN_REQS_ANON.seconds
 
     alias Allow = Bool
     alias Response = {status: HTTP::Status, body: SendFundsResult | NotFoundResult | RateLimitResult | String}
