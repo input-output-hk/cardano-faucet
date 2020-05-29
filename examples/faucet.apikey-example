@@ -1,20 +1,30 @@
-# This file contains faucet API keys to exempt send money requests from rate-limiting
+# This file contains faucet API keys to exempt send money requests from rate-limiting.
 #
-# Comment lines start with a hash; blank or whitespaced lines are allowed
+# Comment lines start with a hash; blank or white spaced lines are allowed.
 #
-# There must be one API key per line with an optional comment
-# The API key must be 32 alphanumeric characters
+# Each API key record will occupy one line, having white space separated required fields of:
+#  1) The API key, which must be 32 alphanumeric characters
+#  2) The API key's faucet transfer value per Tx (a positive integer, in Lovelaces)
+#  3) The API key's rate limit period (a positive integer, 1 Tx per <THIS MANY> seconds)
+#
+# Instead of a positive integer, fields (2) and (3) can use the word "default" (without quotes)
+# to utilize the default LOVELACES_TO_GIVE_APIKEY and SECS_BETWEEN_REQS_APIKEY parameters.
+
+# After the 3 required fields above, an optional comment can follow.
 #
 # The parameter key-value pair to submit is `apiKey=$KEY`, such as:
-#   curl -XPOST https://FQDN/send-money/$ADDRESS?apiKey=$KEY
+#   curl -v -XPOST "http[s]://FQDN/send-money/$ADDRESS?apiKey=$KEY"
 #
 # API keys can be generated with:
-#   tr -cd 'A-Za-z0-9' < /dev/urandom | head -c 32
+#   NUM=10; for i in $(seq 1 $NUM); do tr -cd 'A-Za-z0-9' < /dev/urandom | head -c 32; echo; done
 #
 # Example formatting below:
 
-kRl9TACrYmXaPKQ5sRm8on2lB7Pi03aG DevOps
-x73AajBcMOj1ibk7r7buLNgJKdL5ilDe Company1 - Testing
-TCTMjii8al13esthArVQH3IXwU5ES9l8 Company2
-5fGmc1byLVLLtEQAKtH3O8ZfSxrppPBw
-1TtL0yOeVUw6es6HXfXMFdJ66Mj8f7bI Internal
+# API Key (32 alphanumerics)        LOVELACES_PER_TX    PERIOD_PER_TX   OPTIONAL_COMMENT
+kRl9TACrYmXaPKQ5sRm8on2lB7Pi03aG    1000000000          0               DevOps
+x73AajBcMOj1ibk7r7buLNgJKdL5ilDe    1000000000          86400           Company1 - Testing
+TCTMjii8al13esthArVQH3IXwU5ES9l8    1000000             3600            Company2
+5fGmc1byLVLLtEQAKtH3O8ZfSxrppPBw    default             default         User1 - Default value and period
+1TtL0yOeVUw6es6HXfXMFdJ66Mj8f7bI    default             7200            User2 - Default value, custom period
+BxXdHq6OxJrIbcto32lK0h3oaeXq663d    50000000000         default         User3 - Custom value, default period
+8L0acDZoGFyIFbtTuJNi8pPFVbcCtUfI    10000000000         21600
