@@ -35,12 +35,14 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
   Log.info { "Listening on http://#{address}" }
 
   Log.debug { "ANONYMOUS_ACCESS: #{ANONYMOUS_ACCESS}" }
+  Log.debug { "CARDANO_ENV: #{CARDANO_ENV}" }
   Log.debug { "FAUCET_API_KEY_PATH: #{FAUCET_API_KEY_PATH}" }
   Log.debug { "FAUCET_LISTEN_PORT: #{FAUCET_LISTEN_PORT}" }
   Log.debug { "FAUCET_LOG_LEVEL: #{FAUCET_LOG_LEVEL}" }
   Log.debug { "FAUCET_PASSPHRASE_PATH: #{FAUCET_PASSPHRASE_PATH}" }
   Log.debug { "FAUCET_WALLET_ID_PATH: #{FAUCET_WALLET_ID_PATH}" }
   Log.debug { "FAUCET_WALLET_ID: #{FAUCET_WALLET_ID}" }
+  Log.debug { "GENESIS_BLOCK_HASH: #{faucet.settings.genesis_block_hash}" }
   Log.debug { "LOVELACES_TO_GIVE_ANON: #{LOVELACES_TO_GIVE_ANON}" }
   Log.debug { "LOVELACES_TO_GIVE_APIKEY: #{LOVELACES_TO_GIVE_APIKEY}" }
   Log.debug { "SECS_BETWEEN_REQS_ANON: #{SECS_BETWEEN_REQS_ANON}" }

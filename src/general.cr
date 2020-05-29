@@ -22,8 +22,6 @@ def readKeys(file)
         next
       end
 
-      #Log.debug { "#{i.split.size} : #{i.split}" }
-
       # Ensure all required fields are included in each key record processed
       raise "#{msgPrefix} does not contain the 3 required fields" if i.split.size < 3
 
@@ -36,6 +34,9 @@ def readKeys(file)
         raise "#{msgPrefix}, key \"#{keyFields[0]}\" is not a #{API_KEY_LEN} char alphanumeric"
       end
 
+      # Ensure all declared API keys are unique
+      raise "#{msgPrefix} contains an API key that has already been declared" if apiKeys.has_key?(apiKey)
+
       # Ensure the key field LOVELACES_PER_TX is > 0 or "default" and parse
       if (keyFields[1].to_u64? && keyFields[1].to_u64 > 0) || keyFields[1].to_s == "default"
         lovelacesPerTx = keyFields[1].to_u64? ? keyFields[1].to_u64 : LOVELACES_TO_GIVE_APIKEY
@@ -44,8 +45,8 @@ def readKeys(file)
       end
 
       # Ensure the key field PERIOD_PER_TX is >= 0 or "default" and parse
-      if keyFields[2].to_u64? || keyFields[2].to_s == "default"
-        periodPerTx = keyFields[2].to_u64? ? keyFields[2].to_u64 : SECS_BETWEEN_REQS_APIKEY
+      if keyFields[2].to_u32? || keyFields[2].to_s == "default"
+        periodPerTx = keyFields[2].to_u32? ? keyFields[2].to_u32 : SECS_BETWEEN_REQS_APIKEY
       else
         raise "#{msgPrefix}, PERIOD_PER_TX field is not >= 0 or \"default\" (without quotes)"
       end

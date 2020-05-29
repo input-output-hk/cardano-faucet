@@ -7,8 +7,8 @@
 #  2) The API key's faucet transfer value per Tx (integer > 0, in Lovelaces)
 #  3) The API key's rate limit period (integer >= 0, 1 Tx per <THIS MANY> seconds)
 #
-# Instead of a positive integer, fields (2) and (3) can use the word "default" (without quotes)
-# to utilize the default LOVELACES_TO_GIVE_APIKEY and SECS_BETWEEN_REQS_APIKEY parameters.
+# Fields (2) and (3) can also use the word "default" (without quotes) to utilize the
+# default LOVELACES_TO_GIVE_APIKEY and SECS_BETWEEN_REQS_APIKEY parameters.
 
 # An optional comment can follow the required fields with a default API_KEY_COMMENT_MAX_LEN of 64.
 #
