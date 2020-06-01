@@ -159,13 +159,13 @@ module Cardano
         txCmds << <<-SQL
           CREATE TABLE requests (
             host VARCHAR NOT NULL,
+            apikey VARCHAR NOT NULL DEFAULT '',
             seen TIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             hash VARCHAR NOT NULL DEFAULT '',
-            apikey VARCHAR NOT NULL DEFAULT '',
             CONSTRAINT requests_pk PRIMARY KEY (host, apikey)
           )
         SQL
-        txCmds << "INSERT INTO requests SELECT host, seen, hash, '' FROM old_requests"
+        txCmds << "INSERT INTO requests SELECT host, '', seen, hash FROM old_requests"
         txCmds << "DROP TABLE old_requests"
         migrate_tx txCmds
       else
@@ -363,7 +363,7 @@ module Cardano
 
       found = nil
 
-      select_seen(ip, allow_after) do |rs|
+      select_seen(ip, apiKey, allow_after) do |rs|
         rs.each do
           seen = rs.read(Time)
           found = {
@@ -378,8 +378,8 @@ module Cardano
         return found.not_nil!
       end
 
-      @db.exec(<<-SQL, ip, Time.utc, @settings.genesis_block_hash)
-        INSERT OR REPLACE INTO requests VALUES (?, ?, ?)
+      @db.exec(<<-SQL, ip, apiKey, Time.utc, @settings.genesis_block_hash)
+        INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?)
       SQL
 
       {
@@ -389,10 +389,11 @@ module Cardano
       }
     end
 
-    def select_seen(ip, allow_after, &block : DB::ResultSet -> Nil)
-      @db.query(<<-SQL, ip, allow_after, @settings.genesis_block_hash, &block)
+    def select_seen(ip, apiKey, allow_after, &block : DB::ResultSet -> Nil)
+      @db.query(<<-SQL, ip, apiKey, allow_after, @settings.genesis_block_hash, &block)
         SELECT seen FROM requests
           WHERE host = ?
+          AND apikey = ?
           AND seen > ?
           AND hash = ?
           LIMIT 1
