@@ -30,13 +30,14 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
     end
   end
 
-  address = server.bind_tcp(FAUCET_LISTEN_PORT)
+  address = server.bind_tcp(FAUCET_LISTEN_ADDRESS, FAUCET_LISTEN_PORT)
 
   Log.info { "Listening on http://#{address}" }
 
   Log.debug { "ANONYMOUS_ACCESS: #{ANONYMOUS_ACCESS}" }
   Log.debug { "CARDANO_ENV: #{CARDANO_ENV}" }
   Log.debug { "FAUCET_API_KEY_PATH: #{FAUCET_API_KEY_PATH}" }
+  Log.debug { "FAUCET_LISTEN_ADDRESS: #{FAUCET_LISTEN_ADDRESS}" }
   Log.debug { "FAUCET_LISTEN_PORT: #{FAUCET_LISTEN_PORT}" }
   Log.debug { "FAUCET_LOG_LEVEL: #{FAUCET_LOG_LEVEL}" }
   Log.debug { "FAUCET_PASSPHRASE_PATH: #{FAUCET_PASSPHRASE_PATH}" }
@@ -45,6 +46,7 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
   Log.debug { "GENESIS_BLOCK_HASH: #{faucet.settings.genesis_block_hash}" }
   Log.debug { "LOVELACES_TO_GIVE_ANON: #{LOVELACES_TO_GIVE_ANON}" }
   Log.debug { "LOVELACES_TO_GIVE_APIKEY: #{LOVELACES_TO_GIVE_APIKEY}" }
+  Log.debug { "RATE_LIMIT_ON_SUCCESS: #{RATE_LIMIT_ON_SUCCESS}" }
   Log.debug { "SECS_BETWEEN_REQS_ANON: #{SECS_BETWEEN_REQS_ANON}" }
   Log.debug { "SECS_BETWEEN_REQS_APIKEY: #{SECS_BETWEEN_REQS_APIKEY}" }
   Log.debug { "USE_BYRON_WALLET: #{USE_BYRON_WALLET}" }

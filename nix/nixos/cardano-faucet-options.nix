@@ -37,6 +37,12 @@ in {
       description = "The default path to the cardano faucet installation.";
     };
 
+    faucetListenAddress = mkOption {
+      type = types.str;
+      default = "127.0.0.1";
+      description = "The default IP address cardano faucet will listen on.";
+    };
+
     faucetListenPort = mkOption {
       type = types.port;
       default = 8091;
@@ -84,8 +90,21 @@ in {
       type = types.package;
       default = (import ../. {}).packages.cardano-faucet;
       defaultText = "cardano-faucet";
+      description = "The cardano-faucet package to be used";
+    };
+
+    rateLimitOnSuccess = mkOption {
+      type = types.bool;
+      default = true;
       description = ''
-        The cardano-faucet package to be used
+        Whether to apply a rate limiting timestamp on confirmation of a successful
+        send-money transaction, or at the point of receiving the send-money request.
+        Applying a rate limiting timestamp on success will ensure users submitting
+        improper requests won't have to wait another potentially extended period of
+        time prior to fixing their mistake and trying again.  Setting this parameter
+        to false will apply a rate limiting timestamp upon receiving the request so
+        that even if the request fails, the rate limit is in effect.  This would help
+        protect against errant scripts, [D]DoS load, exploitation probes, etc.
       '';
     };
 

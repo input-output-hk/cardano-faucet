@@ -128,6 +128,7 @@ module Cardano
       @db.scalar "PRAGMA journal_mode=WAL"
       @lastMetricsTime = Time.utc
       @lastMetrics = ""
+      @lastRequestTime = Time.utc
       migrations
     end
 
@@ -194,6 +195,7 @@ module Cardano
     end
 
     def on_request(context : HTTP::Server::Context) : Response
+      @lastRequestTime = Time.utc
       case context.request.method
       when "POST"
         on_post(context)
@@ -279,16 +281,16 @@ module Cardano
         return on_forbidden
       end
 
-      rate_limiter = limit_rate(
+      rate_limiter, ip = limit_rate(
         real_ip(context.request.headers["X-Real-IP"]?) || context.request.remote_address,
         timeBetweenRequests.as(Time::Span),
         apiKey)
 
       if rate_limiter[:allow]
         if authenticated
-          on_send_money(match[1], API_KEYS[apiKey][:lovelacesPerTx].as(UInt64))
+          on_send_money(match[1], API_KEYS[apiKey][:lovelacesPerTx].as(UInt64), ip, apiKey)
         else
-          on_send_money(match[1], LOVELACES_TO_GIVE_ANON)
+          on_send_money(match[1], LOVELACES_TO_GIVE_ANON, ip, apiKey)
         end
       else
         on_too_many_requests(rate_limiter[:try_again])
@@ -320,8 +322,8 @@ module Cardano
       }
     end
 
-    def on_send_money(to_address : String, amount : UInt64) : Response
-      result = send_funds(to_address, amount)
+    def on_send_money(to_address : String, amount : UInt64, ip : String, apiKey : String) : Response
+      result = send_funds(to_address, amount, ip, apiKey)
       {
         status: HTTP::Status::OK,
         body:   result,
@@ -329,7 +331,7 @@ module Cardano
     end
 
     def on_too_many_requests(try_again : Time) : Response
-      delta = (try_again - Time.utc).total_seconds.to_i
+      delta = (try_again - @lastRequestTime).total_seconds.to_i
       msg = {statusCode: 429,
              error:      "Too Many Requests",
              message:    "Try again in #{delta} seconds",
@@ -349,17 +351,17 @@ module Cardano
     def real_ip(header : Nil) : Nil
     end
 
-    def limit_rate(ip : Nil, timeBetweenRequests : Time::Span, apiKey : String) : NamedTuple(time: Time, allow: Bool, try_again: Time)
-      {
-        time:      Time.utc,
-        allow:     false,
-        try_again: Time.utc + timeBetweenRequests,
-      }
+    def limit_rate(remote : Nil, timeBetweenRequests : Time::Span, apiKey : String) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
+      return({time:      @lastRequestTime,
+              allow:     false,
+              try_again: @lastRequestTime + timeBetweenRequests,
+             },
+             "")
     end
 
-    def limit_rate(remote : String, timeBetweenRequests : Time::Span, apiKey : String) : NamedTuple(time: Time, allow: Bool, try_again: Time)
+    def limit_rate(remote : String, timeBetweenRequests : Time::Span, apiKey : String) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
       ip = Socket::IPAddress.parse("tcp://#{remote}").address
-      allow_after = Time.utc - timeBetweenRequests
+      allow_after = @lastRequestTime - timeBetweenRequests
 
       found = nil
 
@@ -375,18 +377,20 @@ module Cardano
       end
 
       if found
-        return found.not_nil!
+        return(found.not_nil!, ip)
       end
 
-      @db.exec(<<-SQL, ip, apiKey, Time.utc, @settings.genesis_block_hash)
-        INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?)
-      SQL
+      unless RATE_LIMIT_ON_SUCCESS
+        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash)
+          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?)
+        SQL
+      end
 
-      {
-        time:      Time.utc,
-        allow:     true,
-        try_again: allow_after,
-      }
+      return({time:      @lastRequestTime,
+              allow:     true,
+              try_again: allow_after,
+             },
+             ip)
     end
 
     def select_seen(ip, apiKey, allow_after, &block : DB::ResultSet -> Nil)
@@ -410,7 +414,7 @@ module Cardano
       result.strip
     end
 
-    def send_funds(address : String, amount : UInt64) : SendFundsResult
+    def send_funds(address : String, amount : UInt64, ip : String, apiKey : String) : SendFundsResult
       tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount)
       amount_with_fees = amount + tx_fees
 
@@ -445,6 +449,13 @@ module Cardano
         txid:    id,
       }
       Log.info { msg.to_json }
+
+      if RATE_LIMIT_ON_SUCCESS && id != "ERROR"
+        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash)
+          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?)
+        SQL
+      end
+
       msg
     end
   end
