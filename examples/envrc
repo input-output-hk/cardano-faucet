@@ -1,19 +1,27 @@
 use nix
 
+# For local testing environment customization
+#
 export ANONYMOUS_ACCESS="TRUE"
 export CRYSTAL_LOG_LEVEL="DEBUG"
 export CRYSTAL_LOG_SOURCES="*"
 export FAUCET_API_KEY_PATH="/var/lib/cardano-faucet/faucet.apikey"
+export FAUCET_LISTEN_ADDRESS="127.0.0.1"
 export FAUCET_LISTEN_PORT="8091"
 export FAUCET_SECRET_MNEMONIC_PATH="/var/lib/cardano-faucet/faucet.mnemonic"
 export FAUCET_SECRET_PASSPHRASE_PATH="/var/lib/cardano-faucet/faucet.passphrase"
 export FAUCET_WALLET_ID_PATH="/var/lib/cardano-faucet/faucet.id"
 export LOVELACES_TO_GIVE_ANON="1000000"
 export LOVELACES_TO_GIVE_APIKEY="2000000"
+export RATE_LIMIT_ON_SUCCESS="TRUE"
 export SECS_BETWEEN_REQS_ANON="60"
 export SECS_BETWEEN_REQS_APIKEY="0"
-export USE_BYRON_WALLET="FALSE"
 export WALLET_API="http://localhost:8090/v2"
 export WALLET_LISTEN_PORT="8090"
+
+# Further local testing environment customization
+#
+#export CARDANO_ENV="<CARDANO_ENV>"
+#export USE_BYRON_WALLET="<USE_BYRON_WALLET>"
 
 export NIX_PATH="nixpkgs=$(nix eval '(import ./nix {}).path')"

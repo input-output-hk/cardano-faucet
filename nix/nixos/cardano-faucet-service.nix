@@ -106,12 +106,14 @@ in {
         CRYSTAL_LOG_LEVEL = cfg.faucetLogLevel;
         CRYSTAL_LOG_SOURCES = "*";
         FAUCET_API_KEY_PATH = "${cfg.faucetBasePath}/faucet.apikey";
+        FAUCET_LISTEN_ADDRESS = cfg.faucetListenAddress;
         FAUCET_LISTEN_PORT = toString cfg.faucetListenPort;
         FAUCET_SECRET_MNEMONIC_PATH = "${cfg.faucetBasePath}/faucet.mnemonic";
         FAUCET_SECRET_PASSPHRASE_PATH = "${cfg.faucetBasePath}/faucet.passphrase";
         FAUCET_WALLET_ID_PATH = "${cfg.faucetBasePath}/faucet.id";
         LOVELACES_TO_GIVE_ANON = toString cfg.lovelacesToGiveAnonymous;
         LOVELACES_TO_GIVE_APIKEY = toString cfg.lovelacesToGiveApiKeyAuth;
+        RATE_LIMIT_ON_SUCCESS = if cfg.rateLimitOnSuccess then "TRUE" else "FALSE";
         SECS_BETWEEN_REQS_ANON = toString cfg.secondsBetweenRequestsAnonymous;
         SECS_BETWEEN_REQS_APIKEY = toString cfg.secondsBetweenRequestsApiKeyAuth;
         USE_BYRON_WALLET = if cfg.useByronWallet then "TRUE" else "FALSE";
