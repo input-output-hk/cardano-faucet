@@ -3,7 +3,7 @@
 #
 
 ANONYMOUS_ACCESS         = ENV.fetch("ANONYMOUS_ACCESS", "TRUE") == "TRUE" ? true : false
-CARDANO_ENV              = ENV.fetch("CARDANO_ENV","DEFAULT")
+CARDANO_ENV              = ENV.fetch("CARDANO_ENV", "DEFAULT")
 FAUCET_API_KEY_PATH      = ENV.fetch("FAUCET_API_KEY_PATH", "/var/lib/cardano-faucet/faucet.apikey")
 FAUCET_LOG_LEVEL         = ENV.fetch("CRYSTAL_LOG_LEVEL", "INFO")
 FAUCET_LOG_SOURCES       = ENV.fetch("CRYSTAL_LOG_SOURCES", "*")

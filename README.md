@@ -13,14 +13,14 @@ A simple faucet API server for cardano wallet.
 Now we can test sending some funds to the new account from our faucet:
 
 ```shell-session
-$ curl -XPOST $FAUCET:$PORT/send-money/$ADDR
+$ curl -XPOST "$FAUCET:$PORT/send-money/$ADDR"
 {"success":true,"amount":1000000000,"fee":171334,"txid":"bbe3514818c490b661546f83e1a2ac4ec51180ca9d1f4731642923f447b445b7"}
 ```
 
 Optionally, an api key can be provided to bypass the rate limiter:
 
 ```shell-session
-$ curl -XPOST $FAUCET:$PORT/send-money/$ADDR?apiKey=$APIKEY
+$ curl -XPOST "$FAUCET:$PORT/send-money/$ADDR?apiKey=$APIKEY"
 ```
 
 * Check the network's explorer for the transaction to post, or,
@@ -38,7 +38,11 @@ $ cardano-wallet-{byron|shelley} wallet list
 
 * Continue troubleshooting, if needed, by verifying:
   * file `faucet.id` exists at the nixos option `faucetBasePath` and contains a wallet id
-  * wallet contains a wallet with the id found in `faucet.id` (ex: `cardano-wallet-{byron|shelley} wallet list | grep $(cat faucet.id)`)
+  * wallet contains a wallet with the id found in `faucet.id` Example:
+
+```shell-session
+cardano-wallet-{byron|shelley} wallet list | grep $(cat faucet.id)
+```
 
 * Continue troubleshooting, if needed, by verifying you are not trying to:
   * create a new faucet wallet or faucet wallet passphrase or apikey file when those corresponding state files still exist at `faucetBasePath`
@@ -53,4 +57,4 @@ $ cardano-wallet-{byron|shelley} wallet list
 ## TODO
 
 * Faucet wallets for both byron and shelley are currently created with expect scripts via the cardano-wallet cli
-  * The expect script error handling is fragile and as a future TODO, improve the fragility here by implementing faucet wallet creation by API via crystal if APIs are available
+  * The expect script error handling is fragile; improve this by implementing wallet creation by API if available

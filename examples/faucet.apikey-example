@@ -20,7 +20,7 @@
 #
 # Example formatting below:
 
-# API Key (32 alphanumerics)        LOVELACES_PER_TX    PERIOD_PER_TX   OPTIONAL_COMMENT
+# API Key ([:alnum:]{32})           LOVELACES_PER_TX    PERIOD_PER_TX   OPTIONAL_COMMENT
 kRl9TACrYmXaPKQ5sRm8on2lB7Pi03aG    1000000000          0               DevOps
 x73AajBcMOj1ibk7r7buLNgJKdL5ilDe    1000000000          86400           Company1 - Testing
 TCTMjii8al13esthArVQH3IXwU5ES9l8    1000000             3600            Company2

@@ -49,8 +49,7 @@ module Cardano
     def self.for_wallet(walletId)
       # value = JSON.parse(`cardano-wallet-{byron|shelley} wallet get #{walletId}`)["balance"]["available"]["quantity"].as_i64
 
-      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}"
-                              : "#{WALLET_API}/wallets/#{walletId}"
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}" : "#{WALLET_API}/wallets/#{walletId}"
       Log.debug { "Fetching available wallet value; curl equivalent:" }
       Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
@@ -66,8 +65,7 @@ module Cardano
     def self.for_wallet(walletId)
       # counter = JSON.parse(`cardano-wallet-{byron|shelley} transaction list #{walletId}`)
 
-      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/transactions"
-                              : "#{WALLET_API}/wallets/#{walletId}/transactions"
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/transactions" : "#{WALLET_API}/wallets/#{walletId}/transactions"
       Log.debug { "Fetching wallet transaction count; curl equivalent:" }
       Log.debug { "curl -v #{path} | jq '. | length'" }
       response = Wallet.apiGet(path)
@@ -82,8 +80,7 @@ module Cardano
     def self.for_tx(walletId, dest_addr, amount)
       # fees = JSON.parse(`cardano-wallet-{byron|shelley} transaction fees #{walletId} --payment #{amount}@#{dest_addr}`)["amount"]["quantity"].as_i
 
-      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/payment-fees"
-                              : "#{WALLET_API}/wallets/#{walletId}/payment-fees"
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/payment-fees" : "#{WALLET_API}/wallets/#{walletId}/payment-fees"
       body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
       Log.debug { "Fetching transaction fee estimate; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
@@ -183,7 +180,7 @@ module Cardano
       Log.info { "DB statement execution summary: #{@db.exec statement}" }
     end
 
-    def migrate_tx(txCmds)
+    def migrate_tx(txCmds : Array(String))
       begin
         tx = @db.transaction do |tx|
           txCmds.each do |cmd|
@@ -246,6 +243,7 @@ module Cardano
     end
 
     def on_post(context : HTTP::Server::Context) : Response
+      apiKey = ""
       authenticated = false
 
       match = context.request.path.match(%r(/send-money/([^/]+)))
@@ -258,6 +256,7 @@ module Cardano
           timeBetweenRequests = API_KEYS[apiKey][:periodPerTx].as(UInt32).seconds
         else
           timeBetweenRequests = SECS_BETWEEN_REQS_ANON.seconds
+          apiKey = ""
         end
       else
         timeBetweenRequests = SECS_BETWEEN_REQS_ANON.seconds
@@ -265,15 +264,15 @@ module Cardano
 
       if authenticated
         Log.info { "Auth Request:  #{apiKey}  \"#{API_KEYS[apiKey][:comment]}\"  " \
-                    "LOVELACES_PER_TX: #{API_KEYS[apiKey][:lovelacesPerTx]}  " \
-                    "PERIOD_PER_TX: #{API_KEYS[apiKey][:periodPerTx]}  " \
-                    "IP: #{context.request.remote_address || "NA"}  " \
-                    "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
+                   "LOVELACES_PER_TX: #{API_KEYS[apiKey][:lovelacesPerTx]}  " \
+                   "PERIOD_PER_TX: #{API_KEYS[apiKey][:periodPerTx]}  " \
+                   "IP: #{context.request.remote_address || "NA"}  " \
+                   "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
       else
         Log.info { "Anon Request:  LOVELACES_PER_TX: #{LOVELACES_TO_GIVE_ANON}  " \
-                    "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ANON}  " \
-                    "IP: #{context.request.remote_address || "NA"}  " \
-                    "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
+                   "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ANON}  " \
+                   "IP: #{context.request.remote_address || "NA"}  " \
+                   "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
       end
 
       if !ANONYMOUS_ACCESS && !authenticated
@@ -282,7 +281,8 @@ module Cardano
 
       rate_limiter = limit_rate(
         real_ip(context.request.headers["X-Real-IP"]?) || context.request.remote_address,
-        timeBetweenRequests.as(Time::Span))
+        timeBetweenRequests.as(Time::Span),
+        apiKey)
 
       if rate_limiter[:allow]
         if authenticated
@@ -349,7 +349,7 @@ module Cardano
     def real_ip(header : Nil) : Nil
     end
 
-    def limit_rate(ip : Nil, timeBetweenRequests : Time::Span) : NamedTuple(time: Time, allow: Bool, try_again: Time)
+    def limit_rate(ip : Nil, timeBetweenRequests : Time::Span, apiKey : String) : NamedTuple(time: Time, allow: Bool, try_again: Time)
       {
         time:      Time.utc,
         allow:     false,
@@ -357,7 +357,7 @@ module Cardano
       }
     end
 
-    def limit_rate(remote : String, timeBetweenRequests : Time::Span) : NamedTuple(time: Time, allow: Bool, try_again: Time)
+    def limit_rate(remote : String, timeBetweenRequests : Time::Span, apiKey : String) : NamedTuple(time: Time, allow: Bool, try_again: Time)
       ip = Socket::IPAddress.parse("tcp://#{remote}").address
       allow_after = Time.utc - timeBetweenRequests
 
@@ -426,8 +426,7 @@ module Cardano
                    "\"post-tx\": \"#{source_account_value - amount_with_fees}\" }" }
       end
 
-      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions"
-                              : "#{WALLET_API}/wallets/#{FAUCET_WALLET_ID}/transactions"
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions" : "#{WALLET_API}/wallets/#{FAUCET_WALLET_ID}/transactions"
       body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
       Log.debug { "Performing send; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
