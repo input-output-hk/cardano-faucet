@@ -142,6 +142,7 @@ module Cardano
 
       case version
       when 0
+        Log.info { "Performing db migration 0: request table creation" }
         migrate <<-SQL
           CREATE TABLE IF NOT EXISTS requests (
             host VARCHAR UNIQUE PRIMARY KEY NOT NULL,
@@ -149,9 +150,27 @@ module Cardano
           )
         SQL
       when 1
+        Log.info { "Performing db migration 1: adding a genesis hash column" }
         migrate <<-SQL
           ALTER TABLE requests ADD COLUMN hash VARCHAR NOT NULL DEFAULT ''
         SQL
+      when 2
+        # Add support for per API key rate limiting
+        Log.info { "Performing db migration 2: adding API key support" }
+        txCmds = Array(String).new
+        txCmds << "ALTER TABLE requests RENAME TO old_requests"
+        txCmds << <<-SQL
+          CREATE TABLE requests (
+            host VARCHAR NOT NULL,
+            seen TIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            hash VARCHAR NOT NULL DEFAULT '',
+            apikey VARCHAR NOT NULL DEFAULT '',
+            CONSTRAINT requests_pk PRIMARY KEY (host, apikey)
+          )
+        SQL
+        txCmds << "INSERT INTO requests SELECT host, seen, hash, '' FROM old_requests"
+        txCmds << "DROP TABLE old_requests"
+        migrate_tx txCmds
       else
         return
       end
@@ -161,7 +180,20 @@ module Cardano
     end
 
     def migrate(statement : String)
-      @db.exec statement
+      Log.info { "DB statement execution summary: #{@db.exec statement}" }
+    end
+
+    def migrate_tx(txCmds)
+      begin
+        tx = @db.transaction do |tx|
+          txCmds.each do |cmd|
+            @db.exec cmd
+          end
+        end
+        Log.info { "DB transaction success: #{tx}" }
+      rescue ex
+        Log.error { "ERROR: DB transaction exception due to: #{ex}" }
+      end
     end
 
     def on_request(context : HTTP::Server::Context) : Response
