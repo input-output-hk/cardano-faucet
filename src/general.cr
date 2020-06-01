@@ -59,8 +59,8 @@ def readKeys(file)
       end
 
       apiKeys[apiKey] = {:lovelacesPerTx => lovelacesPerTx,
-                         :periodPerTx => periodPerTx,
-                         :comment => comment}
+                         :periodPerTx    => periodPerTx,
+                         :comment        => comment}
     end
   end
   apiKeys
