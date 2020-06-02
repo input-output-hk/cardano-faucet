@@ -1,8 +1,8 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.cardano-faucet;
-  inherit (lib) mkForce mkIf mkOption optionals reverseList splitString types;
-  inherit (builtins) head replaceStrings;
+  inherit (lib) hasInfix mkForce mkIf mkOption reverseList splitString types;
+  inherit (builtins) head;
   sources = import ../sources.nix;
   iohkNix = import sources.iohk-nix {};
   defaultPackages = (import ../. {}).packages;
@@ -25,21 +25,22 @@ in {
     services.cardano-node = {
       enable = true;
       extraArgs = [ "+RTS" "-N2" "-A10m" "-qg" "-qb" "-M3G" "-RTS" ];
+      environments = { "${cfg.cardanoEnv}" = cfg.cardanoEnvAttrs; };
       environment = cfg.cardanoEnv;
 
       # Enable selfnode and utilize DNS relay for other envs
-      topology = if (cfg.cardanoEnv == "selfnode")
+      topology = if (hasInfix "selfnode" cfg.cardanoEnv)
         then
-          iohkNix.cardanoLib.environments.selfnode.topology
+          cfg.cardanoEnvAttrs.topology
         else iohkNix.cardanoLib.mkEdgeTopology {
-          edgeHost = iohkNix.cardanoLib.environments."${cfg.cardanoEnv}".relaysNew;
+          edgeHost = cfg.cardanoEnvAttrs.relaysNew;
           edgeNodes = [];
         };
-      signingKey = if (cfg.cardanoEnv == "selfnode")
-        then iohkNix.cardanoLib.environments.selfnode.signingKey
+      signingKey = if (hasInfix "selfnode" cfg.cardanoEnv)
+        then cfg.cardanoEnvAttrs.signingKey
         else null;
-      delegationCertificate = if (cfg.cardanoEnv == "selfnode")
-        then iohkNix.cardanoLib.environments.selfnode.delegationCertificate
+      delegationCertificate = if (hasInfix "selfnode" cfg.cardanoEnv)
+        then cfg.cardanoEnvAttrs.delegationCertificate
         else null;
     };
 
@@ -61,7 +62,7 @@ in {
         ${cfg.walletPackage}/bin/cardano-wallet-${if cfg.useByronWallet then "byron" else "shelley"} serve \
           --node-socket ${config.services.cardano-node.socketPath} \
           ${if (cfg.cardanoEnv == "mainnet") then "--mainnet" else "--testnet"} \
-            ${if (cfg.cardanoEnv == "selfnode")
+            ${if (hasInfix "selfnode" cfg.cardanoEnv)
                 then "${config.services.cardano-node.stateDir}/genesis.json"
                 else config.services.cardano-node.genesisFile} \
           --database /var/lib/cardano-wallet/${cfg.cardanoEnv};

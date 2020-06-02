@@ -20,8 +20,37 @@ in {
       type = types.str;
       default = "selfnode";
       description = ''
-        The environment to configure the faucet for.
-        See examples at iohk-nix/cardano-lib/default.nix
+        The environment name to configure the faucet for.
+        This name can be an environment name from those found at
+        iohk-nix/cardano-lib/default.nix, or, it can be a custom
+        name, for example, if launching a test cluster that does
+        not have an environment yet defined in iohk-nix.  If custom,
+        the cardanoEnvAttrs option must contain an attribute set
+        of the same form as the cardano-lib environments found
+        in iohk-nix.
+
+        NOTE: If the environment name has `selfnode` in it,
+        the cardanoEnvAttrs option will be expected to have
+        the following addtional attrs compared to a non-selfnode
+        environment:
+          topology, signingKey, delegationCertificate
+      '';
+    };
+
+    cardanoEnvAttrs = mkOption {
+      type = types.attrs;
+      default = iohkNix.cardanoLib.environments."${cfg.cardanoEnv}";
+      description = ''
+        The environment attribute set to configure the faucet for.
+        This must be an attribute set from an environment found at
+        iohk-nix/cardano-lib/default.nix, or, it must be an attribute set
+        of the same form.
+
+        NOTE: If the cardanoEnv option has `selfnode` in it,
+        this cardanoEnvAttrs option will be expected to have
+        the following addtional attrs compared to a non-selfnode
+        environments:
+          topology, signingKey, delegationCertificate
       '';
     };
 
@@ -110,7 +139,7 @@ in {
 
     useByronWallet = mkOption {
       type = types.bool;
-      default = iohkNix.cardanoLib.environments."${cfg.cardanoEnv}".useByronWallet;
+      default = cfg.cardanoEnvAttrs.useByronWallet;
       description = "Whether to use a Byron wallet or a Shelley wallet for faucet funding operations/APIs.";
     };
 
