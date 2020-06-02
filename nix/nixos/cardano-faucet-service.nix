@@ -22,6 +22,23 @@ in {
 
   config = mkIf cfg.enable {
 
+    environment.systemPackages =
+      let completions = pkgs.runCommand "cardano-cli-completions" {} ''
+        mkdir -p $out/etc/bash_completion.d
+        ${defaultPkgs.cardano-cli}/bin/cardano-cli --bash-completion-script cardano-cli > $out/etc/bash_completion.d/cardano-cli
+      '';
+      in [
+        completions
+        defaultPkgs.cardano-cli
+        defaultPkgs.cardano-wallet-byron
+        defaultPkgs.cardano-wallet-shelley
+        pkgs.jq
+      ];
+
+    environment.variables = {
+      CARDANO_NODE_SOCKET_PATH = config.services.cardano-node.socketPath;
+    };
+
     services.cardano-node = {
       enable = true;
       extraArgs = [ "+RTS" "-N2" "-A10m" "-qg" "-qb" "-M3G" "-RTS" ];
