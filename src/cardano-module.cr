@@ -99,9 +99,9 @@ module Cardano
     )
 
     def self.get
-      # from_json(`cardano-wallet-{byron|shelley} network parameters latest`)
+      # from_json(`cardano-wallet-{byron|shelley} network parameters`)
 
-      path = "#{WALLET_API}/network/parameters/latest"
+      path = "#{WALLET_API}/network/parameters"
       Log.debug { "Fetching network parameters; curl equivalent:" }
       Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
