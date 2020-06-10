@@ -43,6 +43,19 @@ module Cardano
         return {response, result}
       end
     end
+
+    def self.apiRaise(error)
+      begin
+        if JSON.parse(error) && JSON.parse(error)["message"]?
+          msg = JSON.parse(error)["message"]
+        else
+          msg = error
+        end
+      rescue
+        msg = error
+      end
+      raise msg.to_s
+    end
   end
 
   class Account
@@ -56,6 +69,8 @@ module Cardano
       value = 0
       if response[0].success?
         value = JSON.parse(response[1].not_nil!)["balance"]["available"]["quantity"].as_i64
+      else
+        Wallet.apiRaise(response[1].to_s)
       end
       return value.not_nil!
     end
@@ -71,6 +86,8 @@ module Cardano
       response = Wallet.apiGet(path)
       if response[0].success?
         counter = JSON.parse(response[1].not_nil!)
+      else
+        Wallet.apiRaise(response[1].to_s)
       end
       return counter.not_nil!.size
     end
@@ -88,6 +105,8 @@ module Cardano
       fees = 0_i64
       if response[0].success?
         fees = JSON.parse(response[1].not_nil!)["estimated_min"]["quantity"].as_i64
+      else
+        Wallet.apiRaise(response[1].to_s)
       end
       return fees.not_nil!
     end
@@ -105,7 +124,11 @@ module Cardano
       Log.debug { "Fetching network parameters; curl equivalent:" }
       Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
-      from_json(response[1].not_nil!)
+      if response[0].success?
+        from_json(response[1].not_nil!)
+      else
+        Wallet.apiRaise(response[1].to_s)
+      end
     end
   end
 
@@ -497,6 +520,8 @@ module Cardano
       if response[0].success?
         result = response[1]
         id = JSON.parse(result.not_nil!)["id"].as_s
+      else
+        Wallet.apiRaise(response[1].to_s)
       end
 
       msg = {
