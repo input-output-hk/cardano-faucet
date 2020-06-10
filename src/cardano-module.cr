@@ -180,9 +180,14 @@ module Cardano
           ALTER TABLE requests ADD COLUMN address VARCHAR NOT NULL DEFAULT ''
         SQL
       when 5
-        Log.info { "Performing db migration 5: adding an txid column" }
+        Log.info { "Performing db migration 5: adding a txid column" }
         migrate <<-SQL
           ALTER TABLE requests ADD COLUMN txid VARCHAR NOT NULL DEFAULT ''
+        SQL
+      when 6
+        Log.info { "Performing db migration 6: adding an amount column" }
+        migrate <<-SQL
+          ALTER TABLE requests ADD COLUMN amount VARCHAR NOT NULL DEFAULT ''
         SQL
       else
         return
@@ -260,6 +265,7 @@ module Cardano
     end
 
     def on_post(context : HTTP::Server::Context) : Response
+      amount = LOVELACES_TO_GIVE_ANON
       apiKey = ""
       apiKeyComment = ""
       authenticated = false
@@ -270,6 +276,7 @@ module Cardano
       if context.request.query_params.has_key?("apiKey")
         apiKey = context.request.query_params["apiKey"]
         if API_KEYS.has_key?(apiKey)
+          amount = API_KEYS[apiKey][:lovelacesPerTx].as(UInt64)
           authenticated = true
           apiKeyComment = API_KEYS[apiKey][:comment].as(String)
           timeBetweenRequests = API_KEYS[apiKey][:periodPerTx].as(UInt32).seconds
@@ -283,12 +290,12 @@ module Cardano
 
       if authenticated
         Log.info { "Auth Request:  #{apiKey}  \"#{API_KEYS[apiKey][:comment]}\"  " \
-                   "LOVELACES_PER_TX: #{API_KEYS[apiKey][:lovelacesPerTx]}  " \
+                   "LOVELACES_PER_TX: #{amount}  " \
                    "PERIOD_PER_TX: #{API_KEYS[apiKey][:periodPerTx]}  " \
                    "IP: #{context.request.remote_address || "NA"}  " \
                    "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
       else
-        Log.info { "Anon Request:  LOVELACES_PER_TX: #{LOVELACES_TO_GIVE_ANON}  " \
+        Log.info { "Anon Request:  LOVELACES_PER_TX: #{amount}  " \
                    "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ANON}  " \
                    "IP: #{context.request.remote_address || "NA"}  " \
                    "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
@@ -304,23 +311,16 @@ module Cardano
         apiKey,
         apiKeyComment,
         match[1],
+        amount,
         "rateLimitOnRequest"
         )
 
       if rate_limiter[:allow]
-        if authenticated
-          on_send_money(match[1],
-                        API_KEYS[apiKey][:lovelacesPerTx].as(UInt64),
-                        ip,
-                        apiKey,
-                        apiKeyComment)
-        else
-          on_send_money(match[1],
-                        LOVELACES_TO_GIVE_ANON,
-                        ip,
-                        apiKey,
-                        apiKeyComment)
-        end
+        on_send_money(match[1],
+                      amount,
+                      ip,
+                      apiKey,
+                      apiKeyComment)
       else
         on_too_many_requests(rate_limiter[:try_again])
       end
@@ -391,6 +391,7 @@ module Cardano
                    apiKey : String,
                    apiKeyComment : String,
                    address : String,
+                   amount : UInt64,
                    txId : String
                   ) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
 
@@ -406,6 +407,7 @@ module Cardano
                    apiKey : String,
                    apiKeyComment : String,
                    address : String,
+                   amount : UInt64,
                    txId : String
                   ) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
 
@@ -430,8 +432,8 @@ module Cardano
       end
 
       unless RATE_LIMIT_ON_SUCCESS
-        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, txId)
-          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?)
+        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, txId, amount.to_s)
+          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         SQL
       end
 
@@ -506,8 +508,8 @@ module Cardano
       Log.info { msg.to_json }
 
       if RATE_LIMIT_ON_SUCCESS && id != "ERROR"
-        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, id)
-          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?)
+        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, id, amount.to_s)
+          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         SQL
       end
 
