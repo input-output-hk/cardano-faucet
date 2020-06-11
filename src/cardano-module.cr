@@ -46,8 +46,13 @@ module Cardano
 
     def self.apiRaise(error)
       begin
-        if JSON.parse(error) && JSON.parse(error)["message"]?
-          msg = JSON.parse(error)["message"]
+        if blob = JSON.parse(error)
+          code = blob["code"]? || error
+          msg = blob["message"]? || error
+          Log.debug { "Code: #{code}, message: #{msg}" }
+          if code.to_s =~ /^wallet_not_responding$/
+            restartWallet
+          end
         else
           msg = error
         end
@@ -55,6 +60,15 @@ module Cardano
         msg = error
       end
       raise msg.to_s
+    end
+
+    def self.restartWallet
+      IO_CMD_OUT.clear
+      IO_CMD_ERR.clear
+      Log.debug { "Found a cardano-wallet code event requiring cardano-wallet systemd service restart -- restarting..." }
+      cmd = "/run/wrappers/bin/sudo /run/current-system/sw/bin/systemctl restart cardano-wallet.service"
+      result = Process.run(cmd, output: IO_CMD_OUT, error: IO_CMD_ERR, shell: true)
+      Log.debug { "Cardano-wallet restart result:\nRestart success: #{result.success?}\nSTDOUT: #{IO_CMD_OUT}\nSTDERR: #{IO_CMD_ERR}" }
     end
   end
 

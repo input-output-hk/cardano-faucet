@@ -34,3 +34,6 @@ MIN_METRICS_PERIOD = 10_u8
 
 STDOUT.sync = true
 Log.setup_from_env
+
+IO_CMD_OUT    = IO::Memory.new
+IO_CMD_ERR    = IO::Memory.new

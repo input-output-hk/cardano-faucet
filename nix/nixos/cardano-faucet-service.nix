@@ -202,6 +202,10 @@ in {
         pkgs.jq
       ];
 
+    security.sudo.extraConfig = ''
+      cardano-node ALL = NOPASSWD: /run/current-system/sw/bin/systemctl restart cardano-wallet.service
+    '';
+
     environment.variables = {
       CARDANO_NODE_SOCKET_PATH = config.services.cardano-node.socketPath;
     };
@@ -329,7 +333,11 @@ in {
         fi
       '';
 
-      path = [ defaultPkgs.cardano-wallet-byron defaultPkgs.cardano-wallet-shelley ];
+      path = [
+        defaultPkgs.cardano-wallet-byron
+        defaultPkgs.cardano-wallet-shelley
+        pkgs.sudo
+      ];
     };
   };
 }
