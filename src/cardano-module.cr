@@ -3,63 +3,58 @@
 #
 
 module Cardano
+  class ApiException < Exception
+    getter response
+
+    @response : HTTP::Client::Response
+
+    def initialize(@response)
+    end
+  end
+
   class Wallet
     def self.apiPost(path, body)
       client = HTTP::Client.new(API_URI)
-      client.post(path, HEADERS, body) do |response|
-        result = response.body_io.gets
-        statusCode = response.status_code
-        statusMessage = response.status_message
-        Log.debug { "response: #{response}" }
-        if response.success?
-          Log.debug { "statusCode: #{statusCode}" }
-          Log.debug { "statusMessage: #{statusMessage}" }
-          Log.debug { "Result: #{result}" }
-        else
-          Log.error { "statusCode: #{statusCode}" }
-          Log.error { "statusMessage: #{statusMessage}" }
-          Log.error { "Result: #{result}" }
-        end
-        return {response, result}
+      response = client.post(path, HEADERS, body)
+      result = response.body
+      statusCode = response.status_code
+      statusMessage = response.status_message
+      Log.debug { "response: #{response}" }
+      if response.success?
+        Log.debug { "statusCode: #{statusCode}" }
+        Log.debug { "statusMessage: #{statusMessage}" }
+        Log.debug { "Result: #{result}" }
+      else
+        Log.error { "statusCode: #{statusCode}" }
+        Log.error { "statusMessage: #{statusMessage}" }
+        Log.error { "Result: #{result}" }
+        apiRaise response
       end
+      return response
     end
 
     def self.apiGet(path)
       client = HTTP::Client.new(API_URI)
-      client.get(path) do |response|
-        result = response.body_io.gets
-        statusCode = response.status_code
-        statusMessage = response.status_message
-        Log.debug { "response: #{response}" }
-        if response.success?
-          Log.debug { "statusCode: #{statusCode}" }
-          Log.debug { "statusMessage: #{statusMessage}" }
-          Log.debug { "Result: #{result}" }
-        else
-          Log.error { "statusCode: #{statusCode}" }
-          Log.error { "statusMessage: #{statusMessage}" }
-          Log.error { "Result: #{result}" }
-        end
-        return {response, result}
+      response = client.get(path)
+      result = response.body
+      statusCode = response.status_code
+      statusMessage = response.status_message
+      Log.debug { "response: #{response}" }
+      if response.success?
+        Log.debug { "statusCode: #{statusCode}" }
+        Log.debug { "statusMessage: #{statusMessage}" }
+        Log.debug { "Result: #{result}" }
+      else
+        Log.error { "statusCode: #{statusCode}" }
+        Log.error { "statusMessage: #{statusMessage}" }
+        Log.error { "Result: #{result}" }
+        apiRaise response
       end
+      return response
     end
 
-    def self.apiRaise(error)
-      begin
-        if blob = JSON.parse(error)
-          code = blob["code"]? || error
-          msg = blob["message"]? || error
-          Log.debug { "Code: #{code}, message: #{msg}" }
-          if code.to_s =~ /^wallet_not_responding$/
-            restartWallet
-          end
-        else
-          msg = error
-        end
-      rescue
-        msg = error
-      end
-      raise msg.to_s
+    def self.apiRaise(response)
+      raise ApiException.new(response)
     end
 
     def self.restartWallet
@@ -80,12 +75,7 @@ module Cardano
       Log.debug { "Fetching available wallet value; curl equivalent:" }
       Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
-      value = 0
-      if response[0].success?
-        value = JSON.parse(response[1].not_nil!)["balance"]["available"]["quantity"].as_i64
-      else
-        Wallet.apiRaise(response[1].to_s)
-      end
+      value = JSON.parse(response.body)["balance"]["available"]["quantity"].as_i64
       return value.not_nil!
     end
   end
@@ -98,11 +88,7 @@ module Cardano
       Log.debug { "Fetching wallet transaction count; curl equivalent:" }
       Log.debug { "curl -v #{path} | jq '. | length'" }
       response = Wallet.apiGet(path)
-      if response[0].success?
-        counter = JSON.parse(response[1].not_nil!)
-      else
-        Wallet.apiRaise(response[1].to_s)
-      end
+      counter = JSON.parse(response.body)
       return counter.not_nil!.size
     end
   end
@@ -116,12 +102,7 @@ module Cardano
       Log.debug { "Fetching transaction fee estimate; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
-      fees = 0_i64
-      if response[0].success?
-        fees = JSON.parse(response[1].not_nil!)["estimated_min"]["quantity"].as_i64
-      else
-        Wallet.apiRaise(response[1].to_s)
-      end
+      fees = JSON.parse(response.body)["estimated_min"]["quantity"].as_i64
       return fees.not_nil!
     end
   end
@@ -138,11 +119,7 @@ module Cardano
       Log.debug { "Fetching network parameters; curl equivalent:" }
       Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
-      if response[0].success?
-        from_json(response[1].not_nil!)
-      else
-        Wallet.apiRaise(response[1].to_s)
-      end
+      from_json(response.body)
     end
   end
 
@@ -265,7 +242,7 @@ module Cardano
       on_error(error)
     end
 
-    def on_error(error)
+    def on_error(error : Exception)
       msg = {statusCode: 500,
              error:      HTTP::Status::INTERNAL_SERVER_ERROR.to_s,
              message:    error.to_s,
@@ -277,11 +254,50 @@ module Cardano
       }
     end
 
+    def on_error(error : ApiException)
+      body = error.response.body
+      statusCode = error.response.status_code
+
+      begin
+        if blob = JSON.parse(body)
+          code = blob["code"]? || "NA"
+          message = blob["message"]? || body
+          Log.debug { "ApiException code: #{code}, message: #{message}" }
+
+          # Check for errors requiring wallet restart
+          if code.to_s =~ /^wallet_not_responding$/
+            Wallet.restartWallet
+          end
+
+          # Check for errors requiring status code intercept
+          if message.to_s =~ /WrongNetwork/
+            statusCode = 400
+          end
+        else
+          message = body
+        end
+      rescue
+        message = body
+      end
+
+      msg = {statusCode: statusCode,
+             error:      HTTP::Status.from_value?(statusCode).to_s,
+             message:    message.to_s,
+      }
+
+      Log.debug { msg.to_json }
+      {
+        status: HTTP::Status.from_value?(statusCode).as(HTTP::Status),
+        body:   msg,
+      }
+    end
+
     def on_not_found
       msg = {statusCode: 404,
              error:      "Not Found",
              message:    "No URL found",
       }
+
       Log.debug { msg.to_json }
       {
         status: HTTP::Status::NOT_FOUND,
@@ -294,6 +310,7 @@ module Cardano
              error:      "Forbidden",
              message:    "Anonymous Access Not Allowed: please authenticate by apiKey",
       }
+
       Log.debug { msg.to_json }
       {
         status: HTTP::Status::FORBIDDEN,
@@ -530,23 +547,17 @@ module Cardano
       Log.debug { "Performing send; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
-      id = "ERROR"
-      if response[0].success?
-        result = response[1]
-        id = JSON.parse(result.not_nil!)["id"].as_s
-      else
-        Wallet.apiRaise(response[1].to_s)
-      end
+      id = JSON.parse(response.body)["id"].as_s
 
       msg = {
-        success: response[0].success?,
+        success: response.success?,
         amount:  amount,
         fee:     tx_fees,
         txid:    id,
       }
       Log.info { msg.to_json }
 
-      if RATE_LIMIT_ON_SUCCESS && id != "ERROR"
+      if RATE_LIMIT_ON_SUCCESS
         @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, id, amount.to_s)
           INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         SQL
