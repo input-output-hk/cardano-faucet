@@ -81,7 +81,7 @@ else
   GEN_CMD=$SHELLEY_CMD MNEMONIC=$MNEMONIC PASSPHRASE=$PASSPHRASE OUT=$OUT $EXPECT_CMD <<- '  END' > /dev/null
     set chan [open $::env(OUT) w]
     set timeout 10
-    spawn "$::env(GEN_CMD)" wallet create from-mnemonic ShelleyFaucetWallet
+    spawn "$::env(GEN_CMD)" wallet create from-recovery-phrase ShelleyFaucetWallet
     sleep 0.1
     expect "Please enter a 15–24 word mnemonic sentence: "
     send -- "$::env(MNEMONIC)\r"
