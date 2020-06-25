@@ -327,6 +327,7 @@ module Cardano
       match = context.request.path.match(%r(/send-money/([^/]+)))
       return on_not_found unless match
 
+      address = match[1]
       if context.request.query_params.has_key?("apiKey")
         apiKey = context.request.query_params["apiKey"]
         if API_KEYS.has_key?(apiKey)
@@ -364,13 +365,13 @@ module Cardano
         timeBetweenRequests.as(Time::Span),
         apiKey,
         apiKeyComment,
-        match[1],
+        address,
         amount,
         "rateLimitOnRequest"
         )
 
       if rate_limiter[:allow]
-        on_send_money(match[1],
+        on_send_money(address,
                       amount,
                       ip,
                       apiKey,
@@ -470,7 +471,7 @@ module Cardano
 
       found = nil
 
-      select_seen(ip, apiKey, allow_after) do |rs|
+      select_seen(ip, address, apiKey, allow_after) do |rs|
         rs.each do
           seen = rs.read(Time)
           found = {
@@ -498,13 +499,14 @@ module Cardano
              ip)
     end
 
-    def select_seen(ip, apiKey, allow_after, &block : DB::ResultSet -> Nil)
-      @db.query(<<-SQL, ip, apiKey, allow_after, @settings.genesis_block_hash, &block)
+    def select_seen(ip, address, apiKey, allow_after, &block : DB::ResultSet -> Nil)
+      @db.query(<<-SQL, ip, address, apiKey, allow_after, @settings.genesis_block_hash, &block)
         SELECT seen FROM requests
-          WHERE host = ?
+          WHERE (host = ? OR address = ?)
           AND apikey = ?
           AND seen > ?
           AND hash = ?
+          ORDER BY seen DESC
           LIMIT 1
       SQL
     end
