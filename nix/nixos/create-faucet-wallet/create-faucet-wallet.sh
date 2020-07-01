@@ -47,9 +47,9 @@ fi
 
 if [ -z "${MNEMONIC_PATH:-}" ]; then
   if [ "$ERA" == "byron" ]; then
-    MNEMONIC="${MNEMONIC:-"$($BYRON_CMD mnemonic generate)"}"
+    MNEMONIC="${MNEMONIC:-"$($BYRON_CMD reward-phrase generate)"}"
   else
-    MNEMONIC="${MNEMONIC:-"$($SHELLEY_CMD mnemonic generate)"}"
+    MNEMONIC="${MNEMONIC:-"$($SHELLEY_CMD reward-phrase generate)"}"
   fi
 else
   MNEMONIC="$(cat "$MNEMONIC_PATH")"
@@ -61,7 +61,7 @@ if [ "$ERA" == "byron" ]; then
   GEN_CMD=$BYRON_CMD MNEMONIC=$MNEMONIC PASSPHRASE=$PASSPHRASE OUT=$OUT $EXPECT_CMD <<- '  END' > /dev/null
     set chan [open $::env(OUT) w]
     set timeout 10
-    spawn "$::env(GEN_CMD)" wallet create from-mnemonic --wallet-style icarus IcarusFaucetWallet
+    spawn "$::env(GEN_CMD)" wallet create from-recovery-phrase --wallet-style icarus IcarusFaucetWallet
     sleep 0.1
     expect "Please enter 15 mnemonic words : "
     send -- "$::env(MNEMONIC)\r"
