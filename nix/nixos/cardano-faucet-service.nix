@@ -109,6 +109,18 @@ in {
       description = "The default path to the faucet passphrase file.";
     };
 
+    faucetSecretRecaptchaPath = mkOption {
+      type = types.str;
+      default = "/var/lib/keys/faucet.recaptcha";
+      description = ''
+        The default path to the faucet recaptcha file.  This file
+        contains the secret recaptcha key that is associated with the
+        site key being used by a recaptcha implemented on a front-end.
+        For details, see:
+        https://developers.google.com/recaptcha/docs/display
+      '';
+    };
+
     lovelacesToGiveAnonymous = mkOption {
       type = types.int;
       default = 1000000000;
@@ -151,6 +163,16 @@ in {
       type = types.bool;
       default = cfg.cardanoEnvAttrs.useByronWallet;
       description = "Whether to use a Byron wallet or a Shelley wallet for faucet funding operations/APIs.";
+    };
+
+    useRecaptchaOnAnon = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether to expect a recaptcha post parameter for anonymous requests.
+        If true, the expected POST parameter which will be validated by the
+        backend is: g-recaptcha-response
+      '';
     };
 
     walletApi = mkOption {
@@ -299,6 +321,7 @@ in {
         FAUCET_LISTEN_PORT = toString cfg.faucetListenPort;
         FAUCET_SECRET_MNEMONIC_PATH = "${cfg.faucetBasePath}/faucet.mnemonic";
         FAUCET_SECRET_PASSPHRASE_PATH = "${cfg.faucetBasePath}/faucet.passphrase";
+        FAUCET_SECRET_RECAPTCHA_PATH = "${cfg.faucetBasePath}/faucet.recaptcha";
         FAUCET_WALLET_ID_PATH = "${cfg.faucetBasePath}/faucet.id";
         LOVELACES_TO_GIVE_ANON = toString cfg.lovelacesToGiveAnonymous;
         LOVELACES_TO_GIVE_APIKEY = toString cfg.lovelacesToGiveApiKeyAuth;
@@ -306,6 +329,7 @@ in {
         SECS_BETWEEN_REQS_ANON = toString cfg.secondsBetweenRequestsAnonymous;
         SECS_BETWEEN_REQS_APIKEY = toString cfg.secondsBetweenRequestsApiKeyAuth;
         USE_BYRON_WALLET = if cfg.useByronWallet then "TRUE" else "FALSE";
+        USE_RECAPTCHA_ON_ANON = if cfg.useRecaptchaOnAnon then "TRUE" else "FALSE";
         WALLET_API = cfg.walletApi;
         WALLET_LISTEN_PORT = toString cfg.walletListenPort;
       };
@@ -313,18 +337,36 @@ in {
       preStart = ''
         mkdir -p ${cfg.faucetBasePath}
         cd ${cfg.faucetBasePath}
+        # For all files but the api key file, copy the files
+        # into place only if they do not already exist.
+        # The reason is that new faucet wallets will
+        # require removing an old wallet manually first if
+        # the new wallet name will remain the same.  It will also
+        # help prevent accidental overwrites.  The api key file
+        # is updated more routinely and is the exception.
+
+        # Automatically copy api key updates into place
+        if ! [ -s faucet.apikey ]; then
+          chmod 0600 faucet.mnemonic
+        fi
+        cp ${cfg.faucetApiKeyPath} faucet.apikey
+        chmod 0400 faucet.apikey
+
         if ! [ -s faucet.mnemonic ]; then
           cp ${cfg.faucetSecretMnemonicPath} faucet.mnemonic
           chmod 0400 faucet.mnemonic
         fi
+
         if ! [ -s faucet.passphrase ]; then
           cp ${cfg.faucetSecretPassphrasePath} faucet.passphrase
           chmod 0400 faucet.passphrase
         fi
-        if ! [ -s faucet.apikey ]; then
-          cp ${cfg.faucetApiKeyPath} faucet.apikey
-          chmod 0400 faucet.apikey
+
+        if ! [ -s faucet.recaptcha ]; then
+          cp ${cfg.faucetSecretRecaptchaPath} faucet.recaptcha
+          chmod 0400 faucet.recaptcha
         fi
+
         if ! [ -s faucet.id ]; then
           ${defaultPackages.create-faucet-wallet} \
             -e ${if cfg.useByronWallet then "byron" else "shelley"} \
