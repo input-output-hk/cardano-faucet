@@ -13,6 +13,29 @@ module Cardano
   end
 
   class Wallet
+    def self.recaptchaVerify(recaptchaResponse, ip)
+      params = HTTP::Params.encode({"secret" => RECAPTCHA_SECRET,
+                                    "response" => recaptchaResponse,
+                                    "remoteip" => ip })
+      response = HTTP::Client.post(RECAPTCHA_URI + "?" + params, RECAPTCHA_HEADER)
+      result = response.body
+      statusCode = response.status_code
+      statusMessage = response.status_message
+      Log.debug { "response: #{response}" }
+      Log.debug { "submitted ip: #{ip}" }
+      if response.success?
+        Log.debug { "statusCode: #{statusCode}" }
+        Log.debug { "statusMessage: #{statusMessage}" }
+        Log.debug { "Result: #{result.to_s.delete('\n')}" }
+      else
+        Log.error { "statusCode: #{statusCode}" }
+        Log.error { "statusMessage: #{statusMessage}" }
+        Log.error { "Result: #{result.to_s.delete('\n')}" }
+        apiRaise response
+      end
+      return response
+    end
+
     def self.apiPost(path, body)
       client = HTTP::Client.new(API_URI)
       response = client.post(path, HEADERS, body)
@@ -318,6 +341,32 @@ module Cardano
       }
     end
 
+    def on_recaptcha_required
+      msg = {statusCode: 403,
+             error:      "Forbidden",
+             message:    "Anonymous Access Requires Recaptcha: please request funds via the frontend and complete the recaptcha",
+      }
+
+      Log.debug { msg.to_json }
+      {
+        status: HTTP::Status::FORBIDDEN,
+        body:   msg,
+      }
+    end
+
+    def on_recaptcha_failed
+      msg = {statusCode: 403,
+             error:      "Forbidden",
+             message:    "Recaptcha verification failed",
+      }
+
+      Log.debug { msg.to_json }
+      {
+        status: HTTP::Status::FORBIDDEN,
+        body:   msg,
+      }
+    end
+
     def on_post(context : HTTP::Server::Context) : Response
       amount = LOVELACES_TO_GIVE_ANON
       apiKey = ""
@@ -343,25 +392,46 @@ module Cardano
         timeBetweenRequests = SECS_BETWEEN_REQS_ANON.seconds
       end
 
+      ipPort = context.request.remote_address
+      xRealIp = context.request.headers["X-Real-IP"]?
+      ip = Socket::IPAddress.parse("tcp://#{real_ip_port(xRealIp) || ipPort}").address
+
       if authenticated
         Log.info { "Auth Request:  #{apiKey}  \"#{API_KEYS[apiKey][:comment]}\"  " \
                    "LOVELACES_PER_TX: #{amount}  " \
                    "PERIOD_PER_TX: #{API_KEYS[apiKey][:periodPerTx]}  " \
-                   "IP: #{context.request.remote_address || "NA"}  " \
-                   "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
+                   "IP-PORT: #{ipPort || "NA"}  " \
+                   "X-Real-IP: #{xRealIp || "NA"}" }
       else
         Log.info { "Anon Request:  LOVELACES_PER_TX: #{amount}  " \
                    "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ANON}  " \
-                   "IP: #{context.request.remote_address || "NA"}  " \
-                   "X-Real-IP: #{context.request.headers["X-Real-IP"]? || "NA"}" }
+                   "IP-PORT: #{ipPort || "NA"}  " \
+                   "X-Real-IP: #{xRealIp || "NA"}" }
       end
 
       if !ANONYMOUS_ACCESS && !authenticated
         return on_forbidden
       end
 
+      if USE_RECAPTCHA_ON_ANON && !authenticated
+        if context.request.query_params.has_key?("g-recaptcha-response")
+          gRecaptchaResponse = context.request.query_params["g-recaptcha-response"]
+          response = Wallet.recaptchaVerify(gRecaptchaResponse, ip)
+          Log.debug { response }
+          if JSON.parse(response.body)["success"]? && JSON.parse(response.body)["success"].to_s == "true"
+            Log.info { "Recaptcha Verified: true" }
+          else
+            Log.info { "Recaptcha Verified: false" }
+            return on_recaptcha_failed
+          end
+        else
+          Log.info { "Recaptcha Verified: not provided" }
+          return on_recaptcha_required
+        end
+      end
+
       rate_limiter, ip = limit_rate(
-        real_ip(context.request.headers["X-Real-IP"]?) || context.request.remote_address,
+        ip,
         timeBetweenRequests.as(Time::Span),
         apiKey,
         apiKeyComment,
@@ -434,14 +504,14 @@ module Cardano
       }
     end
 
-    def real_ip(header : String) : String
+    def real_ip_port(header : String) : String
       "#{header}:443"
     end
 
-    def real_ip(header : Nil) : Nil
+    def real_ip_port(header : Nil) : Nil
     end
 
-    def limit_rate(remote : Nil,
+    def limit_rate(ip : Nil,
                    timeBetweenRequests : Time::Span,
                    apiKey : String,
                    apiKeyComment : String,
@@ -457,7 +527,7 @@ module Cardano
              "")
     end
 
-    def limit_rate(remote : String,
+    def limit_rate(ip : String,
                    timeBetweenRequests : Time::Span,
                    apiKey : String,
                    apiKeyComment : String,
@@ -466,7 +536,6 @@ module Cardano
                    txId : String
                   ) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
 
-      ip = Socket::IPAddress.parse("tcp://#{remote}").address
       allow_after = @lastRequestTime - timeBetweenRequests
 
       found = nil

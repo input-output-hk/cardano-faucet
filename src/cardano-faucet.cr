@@ -41,6 +41,7 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
   Log.debug { "FAUCET_LISTEN_PORT: #{FAUCET_LISTEN_PORT}" }
   Log.debug { "FAUCET_LOG_LEVEL: #{FAUCET_LOG_LEVEL}" }
   Log.debug { "FAUCET_PASSPHRASE_PATH: #{FAUCET_PASSPHRASE_PATH}" }
+  Log.debug { "FAUCET_RECAPTCHA_PATH: #{FAUCET_RECAPTCHA_PATH}" }
   Log.debug { "FAUCET_WALLET_ID_PATH: #{FAUCET_WALLET_ID_PATH}" }
   Log.debug { "FAUCET_WALLET_ID: #{FAUCET_WALLET_ID}" }
   Log.debug { "GENESIS_BLOCK_HASH: #{faucet.settings.genesis_block_hash}" }
@@ -50,6 +51,7 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
   Log.debug { "SECS_BETWEEN_REQS_ANON: #{SECS_BETWEEN_REQS_ANON}" }
   Log.debug { "SECS_BETWEEN_REQS_APIKEY: #{SECS_BETWEEN_REQS_APIKEY}" }
   Log.debug { "USE_BYRON_WALLET: #{USE_BYRON_WALLET}" }
+  Log.debug { "USE_RECAPTCHA_ON_ANON: #{USE_RECAPTCHA_ON_ANON}" }
   Log.debug { "WALLET_API: #{WALLET_API}" }
   Log.debug { "WALLET_LISTEN_PORT: #{WALLET_LISTEN_PORT}" }
 
