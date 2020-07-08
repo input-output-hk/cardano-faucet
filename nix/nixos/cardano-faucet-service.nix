@@ -346,8 +346,8 @@ in {
         # is updated more routinely and is the exception.
 
         # Automatically copy api key updates into place
-        if ! [ -s faucet.apikey ]; then
-          chmod 0600 faucet.mnemonic
+        if [ -s faucet.apikey ]; then
+          chmod 0600 faucet.apikey
         fi
         cp ${cfg.faucetApiKeyPath} faucet.apikey
         chmod 0400 faucet.apikey
