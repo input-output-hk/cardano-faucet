@@ -21,8 +21,8 @@ module Cardano
       result = response.body
       statusCode = response.status_code
       statusMessage = response.status_message
-      Log.debug { "response: #{response}" }
-      Log.debug { "submitted ip: #{ip}" }
+      Log.debug { "reCaptcha response: #{response}" }
+      Log.debug { "reCaptcha submitted ip: #{ip}" }
       if response.success?
         Log.debug { "statusCode: #{statusCode}" }
         Log.debug { "statusMessage: #{statusMessage}" }
@@ -417,7 +417,6 @@ module Cardano
         if context.request.query_params.has_key?("g-recaptcha-response")
           gRecaptchaResponse = context.request.query_params["g-recaptcha-response"]
           response = Wallet.recaptchaVerify(gRecaptchaResponse, ip)
-          Log.debug { response }
           if JSON.parse(response.body)["success"]? && JSON.parse(response.body)["success"].to_s == "true"
             Log.info { "Recaptcha Verified: true" }
           else
