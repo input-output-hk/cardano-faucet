@@ -342,9 +342,14 @@ module Cardano
     end
 
     def on_recaptcha_required
+      if FAUCET_FRONTEND_URL == ""
+        message = "Anonymous Access Requires Recaptcha: please request funds via the frontend and complete the recaptcha"
+      else
+        message = "Anonymous Access Requires Recaptcha: please request funds via the frontend and complete the recaptcha; #{FAUCET_FRONTEND_URL}"
+      end
       msg = {statusCode: 403,
              error:      "Forbidden",
-             message:    "Anonymous Access Requires Recaptcha: please request funds via the frontend and complete the recaptcha",
+             message:    message,
       }
 
       Log.debug { msg.to_json }

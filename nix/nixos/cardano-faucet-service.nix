@@ -76,6 +76,16 @@ in {
       description = "The default path to the cardano faucet installation.";
     };
 
+    faucetFrontendUrl = mkOption {
+      type = types.str;
+      default = "";
+      description = ''
+        The frontend URL for faucet.  This URL will get used in messages
+        to users who are required to use the frontend for anon requests
+        requiring recaptcha.
+      '';
+    };
+
     faucetListenAddress = mkOption {
       type = types.str;
       default = "127.0.0.1";
@@ -317,6 +327,7 @@ in {
         CRYSTAL_LOG_LEVEL = cfg.faucetLogLevel;
         CRYSTAL_LOG_SOURCES = "*";
         FAUCET_API_KEY_PATH = "${cfg.faucetBasePath}/faucet.apikey";
+        FAUCET_FRONTEND_URL = cfg.faucetFrontendUrl;
         FAUCET_LISTEN_ADDRESS = cfg.faucetListenAddress;
         FAUCET_LISTEN_PORT = toString cfg.faucetListenPort;
         FAUCET_SECRET_MNEMONIC_PATH = "${cfg.faucetBasePath}/faucet.mnemonic";
