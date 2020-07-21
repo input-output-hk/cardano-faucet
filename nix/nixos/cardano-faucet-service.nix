@@ -1,6 +1,7 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.cardano-faucet;
+  cfgNode = config.services.cardano-node;
   inherit (lib) hasInfix mkForce mkIf mkOption reverseList splitString types;
   inherit (builtins) head;
   sources = import ../sources.nix;
@@ -280,11 +281,13 @@ in {
 
       script = ''
         ${cfg.walletPackage}/bin/cardano-wallet-${if cfg.useByronWallet then "byron" else "shelley"} serve \
-          --node-socket ${config.services.cardano-node.socketPath} \
+          --node-socket ${cfgNode.socketPath} \
           ${if (cfg.cardanoEnv == "mainnet") then "--mainnet" else "--testnet"} \
             ${if (hasInfix "selfnode" cfg.cardanoEnv)
-                then "${config.services.cardano-node.stateDir}/genesis.json"
-                else config.services.cardano-node.genesisFile} \
+              then "${cfgNode.stateDir}/genesis.json"
+              else (if cfg.cardanoEnvAttrs ? "genesisFile"
+                    then cfg.cardanoEnvAttrs.genesisFile
+                    else cfg.cardanoEnvAttrs.nodeConfig.ByronGenesisFile)} \
           --database /var/lib/cardano-wallet/${cfg.cardanoEnv};
       '';
 
