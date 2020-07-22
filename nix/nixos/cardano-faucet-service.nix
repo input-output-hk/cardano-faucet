@@ -198,6 +198,16 @@ in {
       description = "The default port cardano wallet will listen on.";
     };
 
+    walletMode = mkOption {
+      type = types.enum [ "mainnet" "staging" "testnet" ];
+      default = if __elem cfg.cardanoEnv [ "mainnet" ]
+                  then "mainnet"
+                  else if __elem cfg.cardanoEnv [ "mainnet_candidate" ]
+                    then "staging"
+                    else "testnet";
+      description = "Which mode to start wallet in: --mainnet, --staging or --testnet";
+    };
+
     walletPackage = mkOption {
       type = types.package;
       default = if cfg.useByronWallet then
@@ -279,15 +289,19 @@ in {
       wantedBy = [ "multi-user.target" ];
       startLimitIntervalSec = 0;
 
-      script = ''
+      script = let
+        genesisFile = if cfg.cardanoEnvAttrs ? "genesisFile"
+                      then cfg.cardanoEnvAttrs.genesisFile
+                      else cfg.cardanoEnvAttrs.nodeConfig.ByronGenesisFile;
+      in ''
         ${cfg.walletPackage}/bin/cardano-wallet-${if cfg.useByronWallet then "byron" else "shelley"} serve \
           --node-socket ${cfgNode.socketPath} \
-          ${if (cfg.cardanoEnv == "mainnet") then "--mainnet" else "--testnet"} \
-            ${if (hasInfix "selfnode" cfg.cardanoEnv)
-              then "${cfgNode.stateDir}/genesis.json"
-              else (if cfg.cardanoEnvAttrs ? "genesisFile"
-                    then cfg.cardanoEnvAttrs.genesisFile
-                    else cfg.cardanoEnvAttrs.nodeConfig.ByronGenesisFile)} \
+          --${cfg.walletMode} \
+            ${if cfg.walletMode != "mainnet"
+              then if (hasInfix "selfnode" cfg.cardanoEnv)
+                then "${cfgNode.stateDir}/genesis.json"
+                else genesisFile
+              else ""} \
           --database /var/lib/cardano-wallet/${cfg.cardanoEnv};
       '';
 
