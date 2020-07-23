@@ -1,14 +1,14 @@
 {
     "cardano-node": {
-        "branch": "release/1.16.x",
+        "branch": "refs/tags/1.17.0",
         "description": null,
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "00830e286846b8d25772d65cd0755c48708cf79e",
-        "sha256": "0cr6x28mh373dnycnghn0izk5ffd28xkv59pw5zw454khvkzgywy",
+        "rev": "0191ff56d194b6ac074af0d51e67493c14e08ffa",
+        "sha256": "1mwx751w6f59bhf8r4n72s0gy0fz5w4ss5jcds0fs8nvjlk7y3c6",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/00830e286846b8d25772d65cd0755c48708cf79e.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/0191ff56d194b6ac074af0d51e67493c14e08ffa.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-wallet": {
@@ -17,10 +17,10 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-wallet",
-        "rev": "2e171e5d44b42b50da14fa6e690cd7f40856a10d",
-        "sha256": "14ym3anjcs2kif8hd7a8myfif9zbw238w4bn86idpd8abggnnmqx",
+        "rev": "cb6fae7bc33d8ba69ce0822e6e77d2f166ffbff0",
+        "sha256": "0ypm4hdpkf1zsq1k9ylij6x97pmgmgfm6wgg1inghw4qpnv7v66b",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-wallet/archive/2e171e5d44b42b50da14fa6e690cd7f40856a10d.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-wallet/archive/cb6fae7bc33d8ba69ce0822e6e77d2f166ffbff0.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "iohk-nix": {
@@ -29,10 +29,10 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "a0d796bb481bdd7b1dfad3b1529d440734de9c07",
-        "sha256": "18zj7bshw0ph16ffaw438mm8ajlh3dn0ns7k92h0ppjsq2cd7hyy",
+        "rev": "80427de403e1205fc9517d716aa25cc05a03e8cd",
+        "sha256": "0lgwpr38ikk54d22n01437mz2xwhn43bqaraqb7v7j69rgjjpswd",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/iohk-nix/archive/a0d796bb481bdd7b1dfad3b1529d440734de9c07.tar.gz",
+        "url": "https://github.com/input-output-hk/iohk-nix/archive/80427de403e1205fc9517d716aa25cc05a03e8cd.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "niv": {
