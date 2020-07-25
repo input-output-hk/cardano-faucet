@@ -202,7 +202,7 @@ in {
       type = types.enum [ "mainnet" "staging" "testnet" ];
       default = if __elem cfg.cardanoEnv [ "mainnet" ]
                   then "mainnet"
-                  else if __elem cfg.cardanoEnv [ "mainnet_candidate" "mainnet_candidate_2" "mainnet_candidate_3" "mainnet_candidate_4" ]
+                  else if lib.hasPrefix "mainnet_candidate" cfg.cardanoEnv
                     then "staging"
                     else "testnet";
       description = "Which mode to start wallet in: --mainnet, --staging or --testnet";
