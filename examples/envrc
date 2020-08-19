@@ -24,4 +24,8 @@ export WALLET_LISTEN_PORT="8090"
 #export CARDANO_ENV="<CARDANO_ENV>"
 #export USE_BYRON_WALLET="<USE_BYRON_WALLET>"
 
-export NIX_PATH="nixpkgs=$(nix eval '(import ./nix {}).path')"
+if [ $(nix --version | grep -oP '\K\d\.\d') == "2.4" ]; then
+  export NIX_PATH="nixpkgs=$(nix eval --impure --expr '(import ./nix {}).path')"
+else
+  export NIX_PATH="nixpkgs=$(nix eval '(import ./nix {}).path')"
+fi
