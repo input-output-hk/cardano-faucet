@@ -1,8 +1,7 @@
 { callPackage
 , sqlite
 , crystal
-, cardano-wallet-byron
-, cardano-wallet-shelley
+, cardano-wallet
 , jq
 , expect
 , lib

@@ -5,8 +5,8 @@ set -euo pipefail
 
 OUT="create-output.log"
 ID="faucet.id"
-BYRON_CMD="@cardanoWalletByron@"
-SHELLEY_CMD="@cardanoWalletShelley@"
+BYRON_CMD="@cardanoWallet@"
+SHELLEY_CMD="@cardanoWallet@"
 EXPECT_CMD="@expect@"
 JQ_CMD="@jq@"
 
@@ -47,7 +47,9 @@ fi
 
 if [ -z "${MNEMONIC_PATH:-}" ]; then
   if [ "$ERA" == "byron" ]; then
-    MNEMONIC="${MNEMONIC:-"$($BYRON_CMD reward-phrase generate)"}"
+    MNEMONIC="${MNEMONIC:-"$($BYRON_CMD reward-phrase generate --size 15)"}"
+    echo "Byron wallet generation is no longer supported by cardano-wallet cli"
+    exit 1
   else
     MNEMONIC="${MNEMONIC:-"$($SHELLEY_CMD reward-phrase generate)"}"
   fi
@@ -58,6 +60,7 @@ fi
 [ -s "$ID" ] && { echo "A faucet wallet id already exists; delete the faucet wallet and id file and retry."; exit 0; }
 
 if [ "$ERA" == "byron" ]; then
+
   GEN_CMD=$BYRON_CMD MNEMONIC=$MNEMONIC PASSPHRASE=$PASSPHRASE OUT=$OUT $EXPECT_CMD <<- '  END' > /dev/null
     set chan [open $::env(OUT) w]
     set timeout 10
