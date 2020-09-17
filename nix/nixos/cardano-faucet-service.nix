@@ -173,7 +173,12 @@ in {
     useByronWallet = mkOption {
       type = types.bool;
       default = cfg.cardanoEnvAttrs.useByronWallet;
-      description = "Whether to use a Byron wallet or a Shelley wallet for faucet funding operations/APIs.";
+      description = ''
+        Whether to use a Byron wallet or a Shelley wallet for faucet funding operations/APIs.
+        NOTE: The cardano-wallet cli no longer supports creating a byron wallet.  If
+              useByronWallet is required, support for creating a byron wallet will need
+              to be re-implemented.
+      '';
     };
 
     useRecaptchaOnAnon = mkOption {
@@ -210,10 +215,7 @@ in {
 
     walletPackage = mkOption {
       type = types.package;
-      default = if cfg.useByronWallet then
-        defaultPkgs.cardano-wallet-byron
-      else
-        defaultPkgs.cardano-wallet-shelley;
+      default = defaultPkgs.cardano-wallet;
       description = "Package for the cardano wallet executable.";
     };
 
@@ -240,8 +242,7 @@ in {
       in [
         completions
         defaultPkgs.cardano-cli
-        defaultPkgs.cardano-wallet-byron
-        defaultPkgs.cardano-wallet-shelley
+        defaultPkgs.cardano-wallet
         pkgs.jq
       ];
 
@@ -294,7 +295,7 @@ in {
                       then cfg.cardanoEnvAttrs.genesisFile
                       else cfg.cardanoEnvAttrs.nodeConfig.ByronGenesisFile;
       in ''
-        ${cfg.walletPackage}/bin/cardano-wallet-${if cfg.useByronWallet then "byron" else "shelley"} serve \
+        ${cfg.walletPackage}/bin/cardano-wallet serve \
           --node-socket ${cfgNode.socketPath} \
           --${cfg.walletMode} \
             ${if cfg.walletMode != "mainnet"
@@ -404,8 +405,7 @@ in {
       '';
 
       path = [
-        defaultPkgs.cardano-wallet-byron
-        defaultPkgs.cardano-wallet-shelley
+        defaultPkgs.cardano-wallet
         pkgs.sudo
       ];
     };
