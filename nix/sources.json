@@ -1,26 +1,26 @@
 {
     "cardano-node": {
-        "branch": "refs/tags/1.21.1",
+        "branch": "refs/tags/1.24.0",
         "description": null,
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "a819311473563cb2ab3cd91543cf0f63facdf43e",
-        "sha256": "1zj780z3j11rwbvazg79ja5110cgvskzdls81ms0dv3qy7lw4iyr",
+        "rev": "c6c5758aa5991a1c0d821622349f39c12a40e1ad",
+        "sha256": "1g078aqrw1sqq56f8vjx0fb4haa0m6bq9bx5gi3d0fc4iva1vnc4",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/a819311473563cb2ab3cd91543cf0f63facdf43e.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/c6c5758aa5991a1c0d821622349f39c12a40e1ad.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-wallet": {
-        "branch": "refs/tags/v2020-10-13",
+        "branch": "KtorZ/test-cluster-allegra",
         "description": "Official Wallet Backend & API for Cardano decentralized",
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-wallet",
-        "rev": "77e04fc0f0c226f27ea2e293666bb8311ba0daa1",
-        "sha256": "0kc1ddidp1vip8rfnm7vp5avx46xr9nvyzn7q9r3yn50ylhx0i0j",
+        "rev": "5da7d5acd1ff686f42e36a945788c8f22293f94b",
+        "sha256": "1i92yyj2piz22y8gngn65hs6x99ic1ac8ym1glar7j8fjfkh507f",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-wallet/archive/77e04fc0f0c226f27ea2e293666bb8311ba0daa1.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-wallet/archive/5da7d5acd1ff686f42e36a945788c8f22293f94b.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "iohk-nix": {
