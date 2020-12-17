@@ -12,15 +12,15 @@
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-wallet": {
-        "branch": "master",
+        "branch": "mary-faucet",
         "description": "Official Wallet Backend & API for Cardano decentralized",
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-wallet",
-        "rev": "85de426c936fdb2174584c529551346bad680f5a",
-        "sha256": "1rkc33nhmphzni1p24fpagy8wlb8hialhjizkc750dbk612ms8p5",
+        "rev": "cdb6bde37de3a688217ed85d8119abbc3f2f5f1a",
+        "sha256": "19p0wp58rf296slqx8sha2lzllll957z8xj7b7anaz9qpby9qij8",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-wallet/archive/85de426c936fdb2174584c529551346bad680f5a.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-wallet/archive/cdb6bde37de3a688217ed85d8119abbc3f2f5f1a.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "iohk-nix": {
