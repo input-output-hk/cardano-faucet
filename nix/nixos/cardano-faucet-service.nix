@@ -205,11 +205,13 @@ in {
 
     walletMode = mkOption {
       type = types.enum [ "mainnet" "staging" "testnet" ];
-      default = if __elem cfg.cardanoEnv [ "mainnet" ]
+      default = if cfg.cardanoEnv == "mainnet"
                   then "mainnet"
-                  else if lib.hasPrefix "mainnet_candidate" cfg.cardanoEnv
-                    then "staging"
-                    else "testnet";
+                else if cfg.cardanoEnv == "staging"
+                  then "staging"
+                else if lib.hasPrefix "mainnet_candidate" cfg.cardanoEnv
+                  then "staging"
+                else "testnet";
       description = "Which mode to start wallet in: --mainnet, --staging or --testnet";
     };
 
