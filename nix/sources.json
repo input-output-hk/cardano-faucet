@@ -1,14 +1,14 @@
 {
     "cardano-node": {
-        "branch": "refs/tags/1.25.0",
+        "branch": "refs/tags/1.25.1",
         "description": null,
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "9d62ffad185eafaabc35682355602fb5b61d33f6",
-        "sha256": "0krfbhxx7xcrlfi3l4hnngd7wxcv2vgbvmzn9nnzf057s6rwwxck",
+        "rev": "9a7331cce5e8bc0ea9c6bfa1c28773f4c5a7000f",
+        "sha256": "1scffi7igv4kj93bpjf8yibcaq0sskfikmm00f7r6q031l53y50c",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/9d62ffad185eafaabc35682355602fb5b61d33f6.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/9a7331cce5e8bc0ea9c6bfa1c28773f4c5a7000f.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-wallet": {
@@ -36,15 +36,15 @@
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "niv": {
-        "branch": "master",
+        "branch": "nixpkgs-unstable",
         "description": "Easy dependency management for Nix projects",
         "homepage": "https://github.com/nmattia/niv",
-        "owner": "nmattia",
-        "repo": "niv",
-        "rev": "c57098815e542b3a345d6f3fa821ea87c75b751d",
-        "sha256": "0q4xjg2nkzcvh62m92d1d2xzxf6xhfr512yndaklqp6qy8vz29jx",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "6dbcdd2bc19d4377a250c73e658445426de64957",
+        "sha256": "1gaba2csw6p6mdx2q8qnxd18bzz4kfjgfgsvy1vb3nrp9qd6iiv9",
         "type": "tarball",
-        "url": "https://github.com/nmattia/niv/archive/c57098815e542b3a345d6f3fa821ea87c75b751d.tar.gz",
+        "url": "https://github.com/NixOS/nixpkgs/archive/6dbcdd2bc19d4377a250c73e658445426de64957.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "nixpkgs": {
