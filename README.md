@@ -4,7 +4,7 @@ A simple faucet API server for cardano wallet.
 
 ## Running
 
-* To run the faucet on a target machine, make sure you have [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/) and [cardano-node](https://github.com/input-output-hk/cardano-node) configured appropriately and running, preferably through the nixos cardano-faucet-service [modules](https://github.com/input-output-hk/cardano-faucet/tree/shelley-support/nix/nixos) included in this repo.
+* To run the faucet on a target machine, make sure you have [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/) and [cardano-node](https://github.com/input-output-hk/cardano-node) configured appropriately and running, preferably through the nixos cardano-faucet-service [modules](https://github.com/input-output-hk/cardano-faucet/tree/master/nix/nixos) included in this repo.
 * After that, you can run the cardano-faucet server, adding deployment and nginx proxy helpers with a cardano-faucet role, if desired, such as:
   * [cardano-ops faucet role](https://github.com/input-output-hk/cardano-ops/tree/master/roles/faucet.nix)
 
@@ -27,7 +27,7 @@ $ curl -XPOST "$FAUCET:$PORT/send-money/$ADDR?apiKey=$APIKEY"
 * Use the cardano-wallet cli to query your wallet
 
 ```shell-session
-$ cardano-wallet-{byron|shelley} wallet list
+$ cardano-wallet wallet list
 ```
 
 ## Troubleshooting
@@ -41,7 +41,7 @@ $ cardano-wallet-{byron|shelley} wallet list
   * wallet contains a wallet with the id found in `faucet.id` Example:
 
 ```shell-session
-cardano-wallet-{byron|shelley} wallet list | grep $(cat faucet.id)
+cardano-wallet wallet list | grep $(cat faucet.id)
 ```
 
 * Continue troubleshooting, if needed, by verifying you are not trying to:
@@ -56,5 +56,5 @@ cardano-wallet-{byron|shelley} wallet list | grep $(cat faucet.id)
 
 ## TODO
 
-* Faucet wallets for both byron and shelley are currently created with expect scripts via the cardano-wallet cli
+* Faucet wallets are currently created with expect scripts via the cardano-wallet cli
   * The expect script error handling is fragile; improve this by implementing wallet creation by API if available

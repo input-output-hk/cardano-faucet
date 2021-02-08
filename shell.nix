@@ -3,7 +3,6 @@ pkgs.mkShell {
   buildInputs = with pkgs; [
     cardano-cli
     cardano-wallet
-    cardano-wallet-jormungandr
     crystal
     crystal2nix
     expect

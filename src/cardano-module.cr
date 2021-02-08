@@ -92,7 +92,7 @@ module Cardano
 
   class Account
     def self.for_wallet(walletId)
-      # value = JSON.parse(`cardano-wallet-{byron|shelley} wallet get #{walletId}`)["balance"]["available"]["quantity"].as_i64
+      # value = JSON.parse(`cardano-wallet wallet get #{walletId}`)["balance"]["available"]["quantity"].as_i64
 
       path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}" : "#{WALLET_API}/wallets/#{walletId}"
       Log.debug { "Fetching available wallet value; curl equivalent:" }
@@ -105,7 +105,7 @@ module Cardano
 
   class Txs
     def self.for_wallet(walletId)
-      # counter = JSON.parse(`cardano-wallet-{byron|shelley} transaction list #{walletId}`)
+      # counter = JSON.parse(`cardano-wallet transaction list #{walletId}`)
 
       path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/transactions" : "#{WALLET_API}/wallets/#{walletId}/transactions"
       Log.debug { "Fetching wallet transaction count; curl equivalent:" }
@@ -118,7 +118,7 @@ module Cardano
 
   class Fees
     def self.for_tx(walletId, dest_addr, amount)
-      # fees = JSON.parse(`cardano-wallet-{byron|shelley} transaction fees #{walletId} --payment #{amount}@#{dest_addr}`)["amount"]["quantity"].as_i
+      # fees = JSON.parse(`cardano-wallet transaction fees #{walletId} --payment #{amount}@#{dest_addr}`)["amount"]["quantity"].as_i
 
       path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/payment-fees" : "#{WALLET_API}/wallets/#{walletId}/payment-fees"
       body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
@@ -136,7 +136,7 @@ module Cardano
     )
 
     def self.get
-      # from_json(`cardano-wallet-{byron|shelley} network parameters`)
+      # from_json(`cardano-wallet network parameters`)
 
       path = "#{WALLET_API}/network/parameters"
       Log.debug { "Fetching network parameters; curl equivalent:" }

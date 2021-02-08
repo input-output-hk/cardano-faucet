@@ -9,8 +9,7 @@ in with {
     inherit (import sources.cardano-node { gitrev = sources.cardano-node.rev; })
       cardano-cli;
     inherit (import sources.cardano-wallet { gitrev = sources.cardano-wallet.rev; })
-      cardano-wallet
-      cardano-wallet-jormungandr;
+      cardano-wallet;
     packages = self.callPackages ./packages.nix { };
     inherit (import sources.gitignore { inherit (self) lib; }) gitignoreSource;
     iohkNix = import sources.iohk-nix {
