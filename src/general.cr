@@ -52,10 +52,10 @@ def readKeys(file)
       end
 
       # Ensure the key field UNIT_TYPE is a proper policy hash or "lovelace"
-      if keyFields[3] =~ /^[A-Fa-f0-9]{#{API_UNIT_TYPE_LEN}}$/ || keyFields[3].to_s == "lovelace"
+      if keyFields[3] =~ /^[A-Fa-f0-9]{#{API_KEY_UNIT_TYPE_LEN}}$/ || keyFields[3].to_s == "lovelace"
         instrumentType = keyFields[3].to_s == "lovelace" ? "lovelace" : keyFields[3].to_s
       else
-        raise "#{msgPrefix}, UNIT_TYPE field is not a policy id of #{API_UNIT_TYPE_LEN} hexidecimal chars or \"lovelace\" (without quotes)"
+        raise "#{msgPrefix}, UNIT_TYPE field is not a policy id of #{API_KEY_UNIT_TYPE_LEN} hexidecimal chars or \"lovelace\" (without quotes)"
       end
 
       # Ensure the comment field, if provided is set properly
@@ -71,5 +71,6 @@ def readKeys(file)
                          :comment        => comment}
     end
   end
+  puts apiKeys.to_pretty_json
   apiKeys
 end

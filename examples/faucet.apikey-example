@@ -4,13 +4,17 @@
 #
 # Each API key record will occupy one line, having white space separated required fields of:
 #  1) The API key, which must be 32 alphanumeric characters
-#  2) The API key's faucet transfer value per Tx (integer > 0, in Lovelaces)
+#  2) The API key's faucet transfer value in units per tx for its unit type (integer > 0, in UNIT_TYPE)
 #  3) The API key's rate limit period (integer >= 0, 1 Tx per <THIS MANY> seconds)
+#  4) The API key's unit type for funding, either: "lovelace" or a 56 character hex string for the asset policy id
 #
-# Fields (2) and (3) can also use the word "default" (without quotes) to utilize the
-# default LOVELACES_TO_GIVE_APIKEY and SECS_BETWEEN_REQS_APIKEY parameters.
+# Instead of a positive integer, fields (2) and (3) can use the word "default" (without quotes)
+# to utilize the default LOVELACES_TO_GIVE_APIKEY and SECS_BETWEEN_REQS_APIKEY parameters.
 
 # An optional comment can follow the required fields with a default API_KEY_COMMENT_MAX_LEN of 64.
+#
+# If the unit type is not "lovelace", then the UNITS_PER_TX field represents the units to
+# transfer of the UNIT_TYPE associated with the API key
 #
 # The parameter key-value pair to submit is `apiKey=$KEY`, such as:
 #   curl -v -XPOST "http[s]://FQDN/send-money/$ADDRESS?apiKey=$KEY"
@@ -20,11 +24,13 @@
 #
 # Example formatting below:
 
-# API Key ([:alnum:]{32})           LOVELACES_PER_TX    PERIOD_PER_TX   OPTIONAL_COMMENT
-kRl9TACrYmXaPKQ5sRm8on2lB7Pi03aG    1000000000          0               DevOps
-x73AajBcMOj1ibk7r7buLNgJKdL5ilDe    1000000000          86400           Company1 - Testing
-TCTMjii8al13esthArVQH3IXwU5ES9l8    1000000             3600            Company2
-5fGmc1byLVLLtEQAKtH3O8ZfSxrppPBw    default             default         User1 - Default value and period
-1TtL0yOeVUw6es6HXfXMFdJ66Mj8f7bI    default             7200            User2 - Default value, custom period
-BxXdHq6OxJrIbcto32lK0h3oaeXq663d    50000000000         default         User3 - Custom value, default period
-8L0acDZoGFyIFbtTuJNi8pPFVbcCtUfI    10000000000         21600
+# API Key (32 alphanumerics)        UNITS_PER_TX        PERIOD_PER_TX   UNIT_TYPE                                                  OPTIONAL_COMMENT
+kRl9TACrYmXaPKQ5sRm8on2lB7Pi03aG    1000000000          0               lovelace                                                   DevOps
+x73AajBcMOj1ibk7r7buLNgJKdL5ilDe    1000000000          86400           lovelace                                                   Company1 - Testing
+TCTMjii8al13esthArVQH3IXwU5ES9l8    1000000             3600            lovelace                                                   Company2
+5fGmc1byLVLLtEQAKtH3O8ZfSxrppPBw    default             default         lovelace                                                   User1 - Default value and period
+1TtL0yOeVUw6es6HXfXMFdJ66Mj8f7bI    default             7200            lovelace                                                   User2 - Default value, custom period
+BxXdHq6OxJrIbcto32lK0h3oaeXq663d    50000000000         default         lovelace                                                   User3 - Custom value, default period
+8L0acDZoGFyIFbtTuJNi8pPFVbcCtUfI    10000000000         21600           lovelace
+EiYaGF93A2JoCNgZNccsgVP0K3KrBfvI    1000000             30              lovelace                                                   Test key
+I6K8l7d1ez9j9UqwhviiPykMOD9VKHmN    2                   86400           6b8d07d69639e9413dd637a1a815a7323c69c86abbafb66dbfdb1aa7   Megacoin funding
