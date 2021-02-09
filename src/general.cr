@@ -23,7 +23,7 @@ def readKeys(file)
       end
 
       # Ensure all required fields are included in each key record processed
-      raise "#{msgPrefix} does not contain the 3 required fields" if i.split.size < 3
+      raise "#{msgPrefix} does not contain the 4 required fields" if i.split.size < 4
 
       keyFields = i.split
 
@@ -51,15 +51,23 @@ def readKeys(file)
         raise "#{msgPrefix}, PERIOD_PER_TX field is not >= 0 or \"default\" (without quotes)"
       end
 
+      # Ensure the key field UNIT_TYPE is a proper policy hash or "lovelace"
+      if keyFields[3] =~ /^[A-Fa-f0-9]{#{API_UNIT_TYPE_LEN}}$/ || keyFields[3].to_s == "lovelace"
+        instrumentType = keyFields[3].to_s == "lovelace" ? "lovelace" : keyFields[3].to_s
+      else
+        raise "#{msgPrefix}, UNIT_TYPE field is not a policy id of #{API_UNIT_TYPE_LEN} hexidecimal chars or \"lovelace\" (without quotes)"
+      end
+
       # Ensure the comment field, if provided is set properly
-      if keyFields.size == 3
+      if keyFields.size == 4
         comment = "Uncommented"
       else
-        comment = keyFields[3..-1].join(" ")[0..API_KEY_COMMENT_MAX_LEN]
+        comment = keyFields[4..-1].join(" ")[0..API_KEY_COMMENT_MAX_LEN]
       end
 
       apiKeys[apiKey] = {:lovelacesPerTx => lovelacesPerTx,
                          :periodPerTx    => periodPerTx,
+                         :instrumentType => instrumentType,
                          :comment        => comment}
     end
   end
