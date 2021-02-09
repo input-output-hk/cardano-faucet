@@ -99,7 +99,29 @@ module Cardano
       Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
       value = JSON.parse(response.body)["balance"]["available"]["quantity"].as_i64
-      return value.not_nil!
+      holdings = Holding.from_json(response.body)
+      return value.not_nil!, holdings
+    end
+
+    class Holding
+      JSON.mapping(
+        assets: { type: Asset },
+      )
+    end
+
+    class Asset
+      JSON.mapping(
+        total: { type: Array(Inventory) },
+        available: { type: Array(Inventory) },
+      )
+    end
+
+    class Inventory
+      JSON.mapping(
+        asset_name: String,
+        quantity: UInt64,
+        policy_id: String,
+      )
     end
   end
 
@@ -467,9 +489,14 @@ module Cardano
       metricsDelta = now - @lastMetricsTime
 
       if metricsDelta.seconds > MIN_METRICS_PERIOD || @lastMetrics == ""
-        result = Account.for_wallet(FAUCET_WALLET_ID)
+        result, holdings = Account.for_wallet(FAUCET_WALLET_ID)
+        assetMetrics = ""
+        holdings.assets.available.each do |asset|
+          name = asset.asset_name == "" ? "UNNAMED" : asset.asset_name
+          assetMetrics += "cardano_faucet_metrics_asset_available{name=\"#{name}\", policy_id=\"#{asset.policy_id}\"} #{asset.quantity}\n"
+        end
         @lastMetricsTime = now
-        @lastMetrics = "cardano_faucet_metrics_value_available #{result}"
+        @lastMetrics = "cardano_faucet_metrics_value_available #{result}\n#{assetMetrics}"
       else
         Log.debug { "Metrics were fetched #{@lastMetricsTime} with a refresh period \
                    of #{MIN_METRICS_PERIOD}s; serving previous result..." }
@@ -604,7 +631,7 @@ module Cardano
       tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount)
       amount_with_fees = amount + tx_fees
 
-      source_account_value = Account.for_wallet(FAUCET_WALLET_ID)
+      source_account_value, holdings = Account.for_wallet(FAUCET_WALLET_ID)
 
       # If we want to add a faucet Tx count metric
       # source_tx_counter = Txs.for_wallet(FAUCET_WALLET_ID)

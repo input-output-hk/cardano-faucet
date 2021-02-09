@@ -71,6 +71,5 @@ def readKeys(file)
                          :comment        => comment}
     end
   end
-  puts apiKeys.to_pretty_json
   apiKeys
 end
