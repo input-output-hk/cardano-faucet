@@ -37,11 +37,19 @@ def readKeys(file)
       # Ensure all declared API keys are unique
       raise "#{msgPrefix} contains an API key that has already been declared" if apiKeys.has_key?(apiKey)
 
-      # Ensure the key field LOVELACES_PER_TX is > 0 or "default" and parse
-      if (keyFields[1].to_u64? && keyFields[1].to_u64 > 0) || keyFields[1].to_s == "default"
-        lovelacesPerTx = keyFields[1].to_u64? ? keyFields[1].to_u64 : LOVELACES_TO_GIVE_APIKEY
+      # Ensure the key field UNITS_PER_TX is > 0 (or "default" for lovelace UNIT_TYPE) and parse
+      if keyFields[3].to_s == "lovelace"
+        if (keyFields[1].to_u64? && keyFields[1].to_u64 > 0) || keyFields[1].to_s == "default"
+          unitsPerTx = keyFields[1].to_u64? ? keyFields[1].to_u64 : LOVELACES_TO_GIVE_APIKEY
+        else
+          raise "#{msgPrefix}, UNITS_PER_TX field is not > 0 or \"default\" (without quotes) for the lovelace unit type"
+        end
       else
-        raise "#{msgPrefix}, LOVELACES_PER_TX field is not > 0 or \"default\" (without quotes)"
+        if keyFields[1].to_u64? && keyFields[1].to_u64 > 0
+          unitsPerTx = keyFields[1].to_u64
+        else
+          raise "#{msgPrefix}, UNITS_PER_TX field is not > 0 for the \"#{keyFields[3]}\" unit type"
+        end
       end
 
       # Ensure the key field PERIOD_PER_TX is >= 0 or "default" and parse
@@ -51,11 +59,15 @@ def readKeys(file)
         raise "#{msgPrefix}, PERIOD_PER_TX field is not >= 0 or \"default\" (without quotes)"
       end
 
-      # Ensure the key field UNIT_TYPE is a proper policy hash or "lovelace"
-      if keyFields[3] =~ /^[A-Fa-f0-9]{#{API_KEY_UNIT_TYPE_LEN}}$/ || keyFields[3].to_s == "lovelace"
-        instrumentType = keyFields[3].to_s == "lovelace" ? "lovelace" : keyFields[3].to_s
+      # Ensure the key field UNIT_TYPE is a proper UNIT_TYPE of ${POLICY_ID}:${ASSET_NAME} or "lovelace"
+      if keyFields[3].to_s == "lovelace"
+        unitType = keyFields[3].to_s
+      elsif keyFields[3] =~ /^[A-Fa-f0-9]{#{API_KEY_UNIT_POLICY_ID_LEN}}:[A-Fa-f0-9]{0,#{API_KEY_UNIT_ASSET_NAME_LEN}}$/
+        unitType = keyFields[3].to_s
       else
-        raise "#{msgPrefix}, UNIT_TYPE field is not a policy id of #{API_KEY_UNIT_TYPE_LEN} hexidecimal chars or \"lovelace\" (without quotes)"
+        raise "#{msgPrefix}, UNIT_TYPE field is not \"lovelace\" (without quotes) or a proper asset of ${POLICY_ID}:${ASSET_NAME} " \
+              "where ${POLICY_ID} is #{API_KEY_UNIT_POLICY_ID_LEN} hex chars and " \
+              "${ASSET_NAME} is 0 to #{API_KEY_UNIT_ASSET_NAME_LEN} hex chars"
       end
 
       # Ensure the comment field, if provided is set properly
@@ -65,9 +77,9 @@ def readKeys(file)
         comment = keyFields[4..-1].join(" ")[0..API_KEY_COMMENT_MAX_LEN]
       end
 
-      apiKeys[apiKey] = {:lovelacesPerTx => lovelacesPerTx,
+      apiKeys[apiKey] = {:unitsPerTx     => unitsPerTx,
                          :periodPerTx    => periodPerTx,
-                         :instrumentType => instrumentType,
+                         :unitType       => unitType,
                          :comment        => comment}
     end
   end

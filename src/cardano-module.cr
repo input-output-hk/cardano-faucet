@@ -139,11 +139,18 @@ module Cardano
   end
 
   class Fees
-    def self.for_tx(walletId, dest_addr, amount)
+    def self.for_tx(walletId, dest_addr, amount, unitType)
       # fees = JSON.parse(`cardano-wallet transaction fees #{walletId} --payment #{amount}@#{dest_addr}`)["amount"]["quantity"].as_i
 
       path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{walletId}/payment-fees" : "#{WALLET_API}/wallets/#{walletId}/payment-fees"
-      body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
+      if unitType == "lovelace"
+        body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
+      else
+        policyId, assetName = unitType.split(":")
+        payments = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":0,"unit":"lovelace"})
+        assets = %("assets":[{"policy_id":"#{policyId}","asset_name":"#{assetName}","quantity":#{amount}}]}]})
+        body = %(#{payments},#{assets})
+      end
       Log.debug { "Fetching transaction fee estimate; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
@@ -154,7 +161,8 @@ module Cardano
 
   class Settings
     JSON.mapping(
-      genesis_block_hash: String
+      genesis_block_hash: String,
+      minimum_utxo_value: { type: MinUtxoValue },
     )
 
     def self.get
@@ -164,7 +172,18 @@ module Cardano
       Log.debug { "Fetching network parameters; curl equivalent:" }
       Log.debug { "curl -v #{path}" }
       response = Wallet.apiGet(path)
-      from_json(response.body)
+      networkParameters = from_json(response.body)
+      if networkParameters.minimum_utxo_value.unit != "lovelace"
+        raise "minimum_utxo_value is no longer lovelace"
+      end
+      networkParameters
+    end
+
+    class MinUtxoValue
+      JSON.mapping(
+        quantity: Int64,
+        unit: String,
+      )
     end
   end
 
@@ -173,7 +192,7 @@ module Cardano
 
     alias Allow = Bool
     alias Response = {status: HTTP::Status, body: SendFundsResult | NotFoundResult | RateLimitResult | String}
-    alias SendFundsResult = {success: Bool, amount: UInt64, fee: Int64, txid: String}
+    alias SendFundsResult = {success: Bool, amount: UInt64, unit: String, fee: Int64, minLovelace: Int64, txid: String}
     alias RateLimitResult = {statusCode: Int32, error: String, message: String, retryAfter: Time}
     alias NotFoundResult = {statusCode: Int32, error: String, message: String}
 
@@ -247,6 +266,11 @@ module Cardano
         Log.info { "Performing db migration 6: adding an amount column" }
         migrate <<-SQL
           ALTER TABLE requests ADD COLUMN amount VARCHAR NOT NULL DEFAULT ''
+        SQL
+      when 7
+        Log.info { "Performing db migration 7: adding an apiunittype column" }
+        migrate <<-SQL
+          ALTER TABLE requests ADD COLUMN apikeyunittype VARCHAR NOT NULL DEFAULT ''
         SQL
       else
         return
@@ -397,6 +421,7 @@ module Cardano
     def on_post(context : HTTP::Server::Context) : Response
       amount = LOVELACES_TO_GIVE_ANON
       apiKey = ""
+      apiKeyUnitType = "lovelace"
       apiKeyComment = ""
       authenticated = false
 
@@ -407,8 +432,9 @@ module Cardano
       if context.request.query_params.has_key?("apiKey")
         apiKey = context.request.query_params["apiKey"]
         if API_KEYS.has_key?(apiKey)
-          amount = API_KEYS[apiKey][:lovelacesPerTx].as(UInt64)
+          amount = API_KEYS[apiKey][:unitsPerTx].as(UInt64)
           authenticated = true
+          apiKeyUnitType = API_KEYS[apiKey][:unitType].as(String)
           apiKeyComment = API_KEYS[apiKey][:comment].as(String)
           timeBetweenRequests = API_KEYS[apiKey][:periodPerTx].as(UInt32).seconds
         else
@@ -425,12 +451,12 @@ module Cardano
 
       if authenticated
         Log.info { "Auth Request:  #{apiKey}  \"#{API_KEYS[apiKey][:comment]}\"  " \
-                   "LOVELACES_PER_TX: #{amount}  " \
+                   "UNITS_PER_TX: #{amount}  " \
                    "PERIOD_PER_TX: #{API_KEYS[apiKey][:periodPerTx]}  " \
                    "IP-PORT: #{ipPort || "NA"}  " \
                    "X-Real-IP: #{xRealIp || "NA"}" }
       else
-        Log.info { "Anon Request:  LOVELACES_PER_TX: #{amount}  " \
+        Log.info { "Anon Request:  UNITS_PER_TX: #{amount}  " \
                    "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ANON}  " \
                    "IP-PORT: #{ipPort || "NA"}  " \
                    "X-Real-IP: #{xRealIp || "NA"}" }
@@ -463,6 +489,7 @@ module Cardano
         apiKeyComment,
         address,
         amount,
+        apiKeyUnitType,
         "rateLimitOnRequest"
         )
 
@@ -471,6 +498,7 @@ module Cardano
                       amount,
                       ip,
                       apiKey,
+                      apiKeyUnitType,
                       apiKeyComment)
       else
         on_too_many_requests(rate_limiter[:try_again])
@@ -492,8 +520,8 @@ module Cardano
         result, holdings = Account.for_wallet(FAUCET_WALLET_ID)
         assetMetrics = ""
         holdings.assets.available.each do |asset|
-          name = asset.asset_name == "" ? "UNNAMED" : asset.asset_name
-          assetMetrics += "cardano_faucet_metrics_asset_available{name=\"#{name}\", policy_id=\"#{asset.policy_id}\"} #{asset.quantity}\n"
+          assetMetrics += "cardano_faucet_metrics_asset_available{asset_name=\"#{asset.asset_name}\", " \
+                          "policy_id=\"#{asset.policy_id}\"} #{asset.quantity}\n"
         end
         @lastMetricsTime = now
         @lastMetrics = "cardano_faucet_metrics_value_available #{result}\n#{assetMetrics}"
@@ -511,10 +539,11 @@ module Cardano
                       amount : UInt64,
                       ip : String,
                       apiKey : String,
+                      apiKeyUnitType : String,
                       apiKeyComment : String,
                      ) : Response
 
-      result = send_funds(to_address, amount, ip, apiKey, apiKeyComment)
+      result = send_funds(to_address, amount, ip, apiKey, apiKeyUnitType, apiKeyComment)
       {
         status: HTTP::Status::OK,
         body:   result,
@@ -548,7 +577,8 @@ module Cardano
                    apiKeyComment : String,
                    address : String,
                    amount : UInt64,
-                   txId : String
+                   txId : String,
+                   apiKeyUnitType : String
                   ) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
 
       return({time:      @lastRequestTime,
@@ -564,7 +594,8 @@ module Cardano
                    apiKeyComment : String,
                    address : String,
                    amount : UInt64,
-                   txId : String
+                   txId : String,
+                   apiKeyUnitType : String
                   ) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
 
       allow_after = @lastRequestTime - timeBetweenRequests
@@ -587,8 +618,8 @@ module Cardano
       end
 
       unless RATE_LIMIT_ON_SUCCESS
-        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, txId, amount.to_s)
-          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, txId, amount.to_s, apiKeyUnitType)
+          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         SQL
       end
 
@@ -625,17 +656,26 @@ module Cardano
                    amount : UInt64,
                    ip : String,
                    apiKey : String,
+                   apiKeyUnitType : String,
                    apiKeyComment : String,
                   ) : SendFundsResult
 
-      tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount)
-      amount_with_fees = amount + tx_fees
 
+      # Setup the transaction basics
       source_account_value, holdings = Account.for_wallet(FAUCET_WALLET_ID)
+      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions" : "#{WALLET_API}/wallets/#{FAUCET_WALLET_ID}/transactions"
+      tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount, apiKeyUnitType)
+      minLovelace = @settings.minimum_utxo_value.quantity
 
-      # If we want to add a faucet Tx count metric
-      # source_tx_counter = Txs.for_wallet(FAUCET_WALLET_ID)
+      # Make an estimate on the cost of the transaction
+      if apiKeyUnitType == "lovelace"
+        amount_with_fees = amount + tx_fees
+      else
+        # Improve this with an asset transaction fee estimator once available
+        amount_with_fees = (minLovelace * 10) + tx_fees
+      end
 
+      # Error if not enough funds available for the estimated cost of the transaction
       if source_account_value < amount_with_fees
         Log.error { "Not enough funds in faucet account, only #{source_account_value} left" }
         raise "Not enough funds in faucet account, only #{source_account_value} left"
@@ -644,24 +684,52 @@ module Cardano
                    "\"post-tx\": \"#{source_account_value - amount_with_fees}\" }" }
       end
 
-      path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions" : "#{WALLET_API}/wallets/#{FAUCET_WALLET_ID}/transactions"
-      body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
+      # If we want to add a faucet Tx count metric
+      # source_tx_counter = Txs.for_wallet(FAUCET_WALLET_ID)
+
+      # Craft the body of the request depending on whether ADA in lovelace or an asset is to be transferred
+      if apiKeyUnitType == "lovelace"
+        body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
+      else
+        # apiKeyUnitType has already been pre-regex-validated as ${POLICY_ID}:${ASSET_NAME} in the apiKey parser of general.cr
+        policyId, assetName = apiKeyUnitType.split(":")
+        payments = %({"payments":[{"address":"#{address}","amount":{"quantity":0,"unit":"lovelace"})
+        assets = %("assets":[{"policy_id":"#{policyId}","asset_name":"#{assetName}","quantity":#{amount}}]}])
+        passphrase = %("passphrase":"#{SECRET_PASSPHRASE}"})
+        body = %(#{payments},#{assets},#{passphrase})
+      end
+
+      # Submit the Tx and obtain basic debug info
       Log.debug { "Performing send; curl equivalent:" }
       Log.debug { "curl -vX POST #{path} -H 'Content-Type: application/json; charset=utf-8' -d '#{body}' --http1.1" }
       response = Wallet.apiPost(path, body)
       id = JSON.parse(response.body)["id"].as_s
 
+      # If an asset is being transferred, obtain the minimum lovelace that was required
+      # Move this to an estimate pre-transaction once an estimate endpoint supports this
+      if apiKeyUnitType != "lovelace"
+        outputs = JSON.parse(response.body)["outputs"].as_a
+        outputs.each do |output|
+          if output["address"] == address
+            minLovelace = output["amount"]["quantity"].as_i64
+            break
+          end
+        end
+      end
+
       msg = {
-        success: response.success?,
-        amount:  amount,
-        fee:     tx_fees,
-        txid:    id,
+        success:      response.success?,
+        amount:       amount,
+        unit:         apiKeyUnitType,
+        fee:          tx_fees,
+        minLovelace:  minLovelace,
+        txid:         id,
       }
       Log.info { msg.to_json }
 
       if RATE_LIMIT_ON_SUCCESS
-        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, id, amount.to_s)
-          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        @db.exec(<<-SQL, ip, apiKey, @lastRequestTime, @settings.genesis_block_hash, apiKeyComment, address, id, amount.to_s, apiKeyUnitType)
+          INSERT OR REPLACE INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         SQL
       end
 

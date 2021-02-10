@@ -28,9 +28,10 @@ RECAPTCHA_SECRET  = readFile(FAUCET_RECAPTCHA_PATH)
 SECRET_PASSPHRASE = readFile(FAUCET_PASSPHRASE_PATH)
 API_KEYS          = readKeys(FAUCET_API_KEY_PATH)
 
-API_KEY_LEN             = 32_u8
-API_KEY_COMMENT_MAX_LEN = 64_u8
-API_KEY_UNIT_TYPE_LEN   = 56_u8
+API_KEY_LEN                   = 32_u8
+API_KEY_COMMENT_MAX_LEN       = 64_u8
+API_KEY_UNIT_POLICY_ID_LEN    = 56_u8
+API_KEY_UNIT_ASSET_NAME_LEN   = 64_u8
 
 API_URI          = URI.parse("#{WALLET_API}")
 HEADERS          = HTTP::Headers{"Content-Type" => "application/json; charset=utf-8"}
