@@ -146,6 +146,7 @@ module Cardano
       if unitType == "lovelace"
         body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
       else
+        # apiKeyUnitType has already been regex validated as ${POLICY_ID}<DELIMITER>${ASSET_NAME}
         policyId = unitType[0, API_KEY_UNIT_POLICY_ID_LEN]
         assetName = unitType[API_KEY_UNIT_POLICY_ID_LEN + API_KEY_UNIT_TYPE_DELIMITER.size, unitType.size]
         payments = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":0,"unit":"lovelace"})
@@ -375,6 +376,22 @@ module Cardano
       }
     end
 
+    def on_bad_asset_request
+      msg = {statusCode: 400,
+             error:      "Bad Request",
+             message:    "The asset parameter does not validate as a ${POLICY_ID}<DELIMITER>${ASSET_NAME} " \
+                         "of #{API_KEY_UNIT_POLICY_ID_LEN}, #{API_KEY_UNIT_TYPE_DELIMITER.size}, " \
+                         "and 0 to #{API_KEY_UNIT_ASSET_NAME_LEN} hex characters respectively, where the " \
+                         "delimiter is (in brackets): (#{API_KEY_UNIT_TYPE_DELIMITER})"
+      }
+
+      Log.debug { msg.to_json }
+      {
+        status: HTTP::Status::NOT_FOUND,
+        body:   msg,
+      }
+    end
+
     def on_forbidden
       msg = {statusCode: 403,
              error:      "Forbidden",
@@ -423,13 +440,15 @@ module Cardano
       amount = LOVELACES_TO_GIVE_ANON
       apiKey = ""
       apiKeyUnitType = "lovelace"
-      apiKeyComment = ""
+      apiKeyComment = "Anonymous lovelace request"
       authenticated = false
 
       match = context.request.path.match(%r(/send-money/([^/]+)))
       return on_not_found unless match
 
       address = match[1]
+
+      # API Key takes priority over both lovelace and asset anonymous requests
       if context.request.query_params.has_key?("apiKey")
         apiKey = context.request.query_params["apiKey"]
         if API_KEYS.has_key?(apiKey)
@@ -439,31 +458,55 @@ module Cardano
           apiKeyComment = API_KEYS[apiKey][:comment].as(String)
           timeBetweenRequests = API_KEYS[apiKey][:periodPerTx].as(UInt32).seconds
         else
-          timeBetweenRequests = SECS_BETWEEN_REQS_ANON.seconds
           apiKey = ""
         end
-      else
-        timeBetweenRequests = SECS_BETWEEN_REQS_ANON.seconds
+      end
+
+      if !authenticated
+        if context.request.query_params.has_key?("asset")
+          unitType = context.request.query_params["asset"]
+          unless unitType =~ /^[A-Fa-f0-9]{#{API_KEY_UNIT_POLICY_ID_LEN}}#{API_KEY_UNIT_TYPE_DELIMITER}[A-Fa-f0-9]{0,#{API_KEY_UNIT_ASSET_NAME_LEN}}$/
+            return on_bad_asset_request
+          end
+          amount = ASSETS_TO_GIVE_ANON
+          apiKeyUnitType = unitType
+          apiKeyComment = "Anonymous asset request"
+          timeBetweenRequests = SECS_BETWEEN_REQS_ASSETS.seconds
+        else
+          timeBetweenRequests = SECS_BETWEEN_REQS_ANON.seconds
+        end
       end
 
       ipPort = context.request.remote_address
       xRealIp = context.request.headers["X-Real-IP"]?
       ip = Socket::IPAddress.parse("tcp://#{real_ip_port(xRealIp) || ipPort}").address
 
+      # Log the request details
       if authenticated
-        Log.info { "Auth Request:  #{apiKey}  \"#{API_KEYS[apiKey][:comment]}\"  " \
+        Log.info { "Auth Request: #{apiKey}  \"#{API_KEYS[apiKey][:comment]}\"  " \
                    "UNITS_PER_TX: #{amount}  " \
                    "PERIOD_PER_TX: #{API_KEYS[apiKey][:periodPerTx]}  " \
                    "IP-PORT: #{ipPort || "NA"}  " \
                    "X-Real-IP: #{xRealIp || "NA"}" }
       else
-        Log.info { "Anon Request:  UNITS_PER_TX: #{amount}  " \
-                   "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ANON}  " \
-                   "IP-PORT: #{ipPort || "NA"}  " \
-                   "X-Real-IP: #{xRealIp || "NA"}" }
+        if apiKeyUnitType == "lovelace"
+          Log.info { "Anon Request: \"lovelace\"  " \
+                     "UNITS_PER_TX: #{amount}  " \
+                     "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ANON}  " \
+                     "IP-PORT: #{ipPort || "NA"}  " \
+                     "X-Real-IP: #{xRealIp || "NA"}" }
+        else
+          Log.info { "Anon Asset Request: #{apiKeyUnitType}  " \
+                     "UNITS_PER_TX: #{amount}  " \
+                     "PERIOD_PER_TX: #{SECS_BETWEEN_REQS_ASSETS}  " \
+                     "IP-PORT: #{ipPort || "NA"}  " \
+                     "X-Real-IP: #{xRealIp || "NA"}" }
+        end
       end
 
-      if !ANONYMOUS_ACCESS && !authenticated
+      if apiKeyUnitType == "lovelace" && !ANONYMOUS_ACCESS && !authenticated
+        return on_forbidden
+      elsif apiKeyUnitType != "lovelace" && !ANONYMOUS_ACCESS_ASSETS && !authenticated
         return on_forbidden
       end
 
@@ -665,14 +708,36 @@ module Cardano
       # Setup the transaction basics
       source_account_value, holdings = Account.for_wallet(FAUCET_WALLET_ID)
       path = USE_BYRON_WALLET ? "#{WALLET_API}/byron-wallets/#{FAUCET_WALLET_ID}/transactions" : "#{WALLET_API}/wallets/#{FAUCET_WALLET_ID}/transactions"
-      tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount, apiKeyUnitType)
       minLovelace = @settings.minimum_utxo_value.quantity
 
       # Make an estimate on the cost of the transaction
       if apiKeyUnitType == "lovelace"
+        tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount, apiKeyUnitType)
         amount_with_fees = amount + tx_fees
       else
+        # apiKeyUnitType has already been regex validated as ${POLICY_ID}<DELIMITER>${ASSET_NAME}
+        policyId = apiKeyUnitType[0, API_KEY_UNIT_POLICY_ID_LEN]
+        assetName = apiKeyUnitType[API_KEY_UNIT_POLICY_ID_LEN + API_KEY_UNIT_TYPE_DELIMITER.size, apiKeyUnitType.size]
+
+        # Check the asset inventory is sufficient for the request
+        assetAvailable = 0
+        holdings.assets.available.each do |asset|
+          if asset.policy_id == policyId && asset.asset_name = assetName
+            assetAvailable = asset.quantity
+            break
+          end
+        end
+        if assetAvailable < amount
+          Log.error { "Not enough asset in faucet account, only #{assetAvailable} #{apiKeyUnitType} left" }
+          raise "Not enough funds in faucet account, only #{assetAvailable} #{apiKeyUnitType} left"
+        else
+          Log.info { "Faucet asset: { \"pre-tx\": \"#{assetAvailable}\", " \
+                     "\"post-tx\": \"#{assetAvailable - amount}\", " \
+                     "\"asset\": \"#{apiKeyUnitType}\" }" }
+        end
+
         # Improve this with an asset transaction fee estimator once available
+        tx_fees = Fees.for_tx(FAUCET_WALLET_ID, address, amount, apiKeyUnitType)
         amount_with_fees = (minLovelace * 10) + tx_fees
       end
 
@@ -692,10 +757,7 @@ module Cardano
       if apiKeyUnitType == "lovelace"
         body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
       else
-        # apiKeyUnitType has already been regex validated as ${POLICY_ID}<DELIMITER>${ASSET_NAME} in the apiKey parser of general.cr
-        policyId = apiKeyUnitType[0, API_KEY_UNIT_POLICY_ID_LEN]
-        assetName = apiKeyUnitType[API_KEY_UNIT_POLICY_ID_LEN + API_KEY_UNIT_TYPE_DELIMITER.size, apiKeyUnitType.size]
-        payments = %({"payments":[{"address":"#{address}","amount":{"quantity":0,"unit":"lovelace"})
+        payments = %({"payments":[{"address":"#{address}","amount":{"quantity":1,"unit":"lovelace"})
         assets = %("assets":[{"policy_id":"#{policyId}","asset_name":"#{assetName}","quantity":#{amount}}]}])
         passphrase = %("passphrase":"#{SECRET_PASSPHRASE}"})
         body = %(#{payments},#{assets},#{passphrase})
