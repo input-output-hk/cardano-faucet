@@ -146,7 +146,7 @@ module Cardano
       if unitType == "lovelace"
         body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
       else
-        policyId, assetName = unitType.split(":")
+        policyId, assetName = unitType.split("-")
         payments = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":0,"unit":"lovelace"})
         assets = %("assets":[{"policy_id":"#{policyId}","asset_name":"#{assetName}","quantity":#{amount}}]}]})
         body = %(#{payments},#{assets})
@@ -268,7 +268,7 @@ module Cardano
           ALTER TABLE requests ADD COLUMN amount VARCHAR NOT NULL DEFAULT ''
         SQL
       when 7
-        Log.info { "Performing db migration 7: adding an apiunittype column" }
+        Log.info { "Performing db migration 7: adding an apikeyunittype column" }
         migrate <<-SQL
           ALTER TABLE requests ADD COLUMN apikeyunittype VARCHAR NOT NULL DEFAULT ''
         SQL
@@ -691,8 +691,8 @@ module Cardano
       if apiKeyUnitType == "lovelace"
         body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
       else
-        # apiKeyUnitType has already been pre-regex-validated as ${POLICY_ID}:${ASSET_NAME} in the apiKey parser of general.cr
-        policyId, assetName = apiKeyUnitType.split(":")
+        # apiKeyUnitType has already been regex validated as ${POLICY_ID}-${ASSET_NAME} in the apiKey parser of general.cr
+        policyId, assetName = apiKeyUnitType.split("-")
         payments = %({"payments":[{"address":"#{address}","amount":{"quantity":0,"unit":"lovelace"})
         assets = %("assets":[{"policy_id":"#{policyId}","asset_name":"#{assetName}","quantity":#{amount}}]}])
         passphrase = %("passphrase":"#{SECRET_PASSPHRASE}"})

@@ -59,13 +59,13 @@ def readKeys(file)
         raise "#{msgPrefix}, PERIOD_PER_TX field is not >= 0 or \"default\" (without quotes)"
       end
 
-      # Ensure the key field UNIT_TYPE is a proper UNIT_TYPE of ${POLICY_ID}:${ASSET_NAME} or "lovelace"
+      # Ensure the key field UNIT_TYPE is a proper UNIT_TYPE of ${POLICY_ID}-${ASSET_NAME} or "lovelace"
       if keyFields[3].to_s == "lovelace"
         unitType = keyFields[3].to_s
-      elsif keyFields[3] =~ /^[A-Fa-f0-9]{#{API_KEY_UNIT_POLICY_ID_LEN}}:[A-Fa-f0-9]{0,#{API_KEY_UNIT_ASSET_NAME_LEN}}$/
+      elsif keyFields[3] =~ /^[A-Fa-f0-9]{#{API_KEY_UNIT_POLICY_ID_LEN}}-[A-Fa-f0-9]{0,#{API_KEY_UNIT_ASSET_NAME_LEN}}$/
         unitType = keyFields[3].to_s
       else
-        raise "#{msgPrefix}, UNIT_TYPE field is not \"lovelace\" (without quotes) or a proper asset of ${POLICY_ID}:${ASSET_NAME} " \
+        raise "#{msgPrefix}, UNIT_TYPE field is not \"lovelace\" (without quotes) or a proper asset of ${POLICY_ID}-${ASSET_NAME} " \
               "where ${POLICY_ID} is #{API_KEY_UNIT_POLICY_ID_LEN} hex chars and " \
               "${ASSET_NAME} is 0 to #{API_KEY_UNIT_ASSET_NAME_LEN} hex chars"
       end
