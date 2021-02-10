@@ -77,10 +77,10 @@ def readKeys(file)
         comment = keyFields[4..-1].join(" ")[0..API_KEY_COMMENT_MAX_LEN]
       end
 
-      apiKeys[apiKey] = {:unitsPerTx     => unitsPerTx,
-                         :periodPerTx    => periodPerTx,
-                         :unitType       => unitType,
-                         :comment        => comment}
+      apiKeys[apiKey] = {:unitsPerTx  => unitsPerTx,
+                         :periodPerTx => periodPerTx,
+                         :unitType    => unitType,
+                         :comment     => comment}
     end
   end
   apiKeys
