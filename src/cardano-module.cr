@@ -91,6 +91,29 @@ module Cardano
         migrate <<-SQL
           ALTER TABLE requests ADD COLUMN apikeyunittype VARCHAR NOT NULL DEFAULT ''
         SQL
+      when 8
+        # Add support for per API UNIT_TYPE key rate limiting
+        Log.info { "Performing db migration 8: adding API UNIT_TYPE key support" }
+        txCmds = Array(String).new
+        txCmds << "ALTER TABLE requests RENAME TO old_requests"
+        txCmds << <<-SQL
+          CREATE TABLE requests (
+            host VARCHAR NOT NULL,
+            apikey VARCHAR NOT NULL DEFAULT '',
+            seen TIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            hash VARCHAR NOT NULL DEFAULT '',
+            apikeycomment VARCHAR NOT NULL DEFAULT '',
+            address VARCHAR NOT NULL DEFAULT '',
+            txid VARCHAR NOT NULL DEFAULT '',
+            amount VARCHAR NOT NULL DEFAULT '',
+            apikeyunittype VARCHAR NOT NULL DEFAULT '',
+            CONSTRAINT requests_pk PRIMARY KEY (host, apikey, apikeyunittype)
+          )
+        SQL
+        txCmds << "INSERT INTO requests SELECT host, apikey, seen, hash, apikeycomment, " \
+                  "address, txid, amount, apikeyunittype FROM old_requests"
+        txCmds << "DROP TABLE old_requests"
+        migrate_tx txCmds
       else
         return
       end
@@ -438,8 +461,8 @@ module Cardano
                    apiKeyComment : String,
                    address : String,
                    amount : UInt64,
-                   txId : String,
-                   apiKeyUnitType : String
+                   apiKeyUnitType : String,
+                   txId : String
                   ) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
 
       return({time:      @lastRequestTime,
@@ -455,15 +478,15 @@ module Cardano
                    apiKeyComment : String,
                    address : String,
                    amount : UInt64,
-                   txId : String,
-                   apiKeyUnitType : String
+                   apiKeyUnitType : String,
+                   txId : String
                   ) : Tuple(NamedTuple(time: Time, allow: Bool, try_again: Time), String)
 
       allow_after = @lastRequestTime - timeBetweenRequests
 
       found = nil
 
-      select_seen(ip, address, apiKey, allow_after) do |rs|
+      select_seen(ip, address, apiKey, allow_after, apiKeyUnitType) do |rs|
         rs.each do
           seen = rs.read(Time)
           found = {
@@ -491,13 +514,14 @@ module Cardano
              ip)
     end
 
-    def select_seen(ip, address, apiKey, allow_after, &block : DB::ResultSet -> Nil)
-      @db.query(<<-SQL, ip, address, apiKey, allow_after, @settings.genesis_block_hash, &block)
+    def select_seen(ip, address, apiKey, allow_after, apiKeyUnitType, &block : DB::ResultSet -> Nil)
+      @db.query(<<-SQL, ip, address, apiKey, allow_after, @settings.genesis_block_hash, apiKeyUnitType, &block)
         SELECT seen FROM requests
           WHERE (host = ? OR address = ?)
           AND apikey = ?
           AND seen > ?
           AND hash = ?
+          AND apikeyunittype = ?
           ORDER BY seen DESC
           LIMIT 1
       SQL
