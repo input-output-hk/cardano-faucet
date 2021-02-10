@@ -387,15 +387,15 @@ module Cardano
 
       Log.debug { msg.to_json }
       {
-        status: HTTP::Status::NOT_FOUND,
+        status: HTTP::Status::BAD_REQUEST,
         body:   msg,
       }
     end
 
-    def on_forbidden
+    def on_forbidden(type : String)
       msg = {statusCode: 403,
              error:      "Forbidden",
-             message:    "Anonymous Access Not Allowed: please authenticate by apiKey",
+             message:    "Anonymous #{type} Access Not Allowed: please authenticate by apiKey",
       }
 
       Log.debug { msg.to_json }
@@ -505,9 +505,9 @@ module Cardano
       end
 
       if apiKeyUnitType == "lovelace" && !ANONYMOUS_ACCESS && !authenticated
-        return on_forbidden
+        return on_forbidden("Lovelace")
       elsif apiKeyUnitType != "lovelace" && !ANONYMOUS_ACCESS_ASSETS && !authenticated
-        return on_forbidden
+        return on_forbidden("Asset")
       end
 
       if USE_RECAPTCHA_ON_ANON && !authenticated
@@ -757,7 +757,7 @@ module Cardano
       if apiKeyUnitType == "lovelace"
         body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
       else
-        payments = %({"payments":[{"address":"#{address}","amount":{"quantity":1,"unit":"lovelace"})
+        payments = %({"payments":[{"address":"#{address}","amount":{"quantity":0,"unit":"lovelace"})
         assets = %("assets":[{"policy_id":"#{policyId}","asset_name":"#{assetName}","quantity":#{amount}}]}])
         passphrase = %("passphrase":"#{SECRET_PASSPHRASE}"})
         body = %(#{payments},#{assets},#{passphrase})
