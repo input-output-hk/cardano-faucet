@@ -146,7 +146,8 @@ module Cardano
       if unitType == "lovelace"
         body = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":#{amount},"unit":"lovelace"}}]})
       else
-        policyId, assetName = unitType.split("-")
+        policyId = unitType[0, API_KEY_UNIT_POLICY_ID_LEN]
+        assetName = unitType[API_KEY_UNIT_POLICY_ID_LEN + API_KEY_UNIT_TYPE_DELIMITER.size, unitType.size]
         payments = %({"payments":[{"address":"#{dest_addr}","amount":{"quantity":0,"unit":"lovelace"})
         assets = %("assets":[{"policy_id":"#{policyId}","asset_name":"#{assetName}","quantity":#{amount}}]}]})
         body = %(#{payments},#{assets})
@@ -691,8 +692,9 @@ module Cardano
       if apiKeyUnitType == "lovelace"
         body = %({"payments":[{"address":"#{address}","amount":{"quantity":#{amount},"unit":"lovelace"}}],"passphrase":"#{SECRET_PASSPHRASE}"})
       else
-        # apiKeyUnitType has already been regex validated as ${POLICY_ID}-${ASSET_NAME} in the apiKey parser of general.cr
-        policyId, assetName = apiKeyUnitType.split("-")
+        # apiKeyUnitType has already been regex validated as ${POLICY_ID}<DELIMITER>${ASSET_NAME} in the apiKey parser of general.cr
+        policyId = apiKeyUnitType[0, API_KEY_UNIT_POLICY_ID_LEN]
+        assetName = apiKeyUnitType[API_KEY_UNIT_POLICY_ID_LEN + API_KEY_UNIT_TYPE_DELIMITER.size, apiKeyUnitType.size]
         payments = %({"payments":[{"address":"#{address}","amount":{"quantity":0,"unit":"lovelace"})
         assets = %("assets":[{"policy_id":"#{policyId}","asset_name":"#{assetName}","quantity":#{amount}}]}])
         passphrase = %("passphrase":"#{SECRET_PASSPHRASE}"})

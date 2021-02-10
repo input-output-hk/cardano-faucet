@@ -27,6 +27,14 @@ in {
       '';
     };
 
+    anonymousAccessAssets = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether to allow anonymous access to the faucet for non-ADA asset requests, or force the use of an API key.
+      '';
+    };
+
     cardanoEnv = mkOption {
       type = types.str;
       default = "selfnode";
@@ -148,6 +156,14 @@ in {
       '';
     };
 
+    assetsToGiveAnonymous = mkOption {
+      type = types.int;
+      default = 2;
+      description = ''
+        The default quantity of assets to send per faucet transaction for an anonymous asset request.
+      '';
+    };
+
     package = mkOption {
       type = types.package;
       default = defaultPackages.cardano-faucet;
@@ -219,6 +235,12 @@ in {
       type = types.package;
       default = defaultPkgs.cardano-wallet;
       description = "Package for the cardano wallet executable.";
+    };
+
+    secondsBetweenRequestsAnonymousAssets = mkOption {
+      type = types.int;
+      default = 24 * 60 * 60;
+      description = "The default seconds per tx (rate limit) an anonymous user is allowed to make on the faucet for non-ADA assets.";
     };
 
     secondsBetweenRequestsAnonymous = mkOption {
@@ -343,6 +365,8 @@ in {
 
       environment = {
         ANONYMOUS_ACCESS = if cfg.anonymousAccess then "TRUE" else "FALSE";
+        ANONYMOUS_ACCESS_ASSETS = if cfg.anonymousAccessAssets then "TRUE" else "FALSE";
+        ASSETS_TO_GIVE_ANON = toString cfg.assetsToGiveAnonymous;
         CARDANO_ENV = cfg.cardanoEnv;
         CRYSTAL_LOG_LEVEL = cfg.faucetLogLevel;
         CRYSTAL_LOG_SOURCES = "*";
@@ -359,6 +383,7 @@ in {
         RATE_LIMIT_ON_SUCCESS = if cfg.rateLimitOnSuccess then "TRUE" else "FALSE";
         SECS_BETWEEN_REQS_ANON = toString cfg.secondsBetweenRequestsAnonymous;
         SECS_BETWEEN_REQS_APIKEY = toString cfg.secondsBetweenRequestsApiKeyAuth;
+        SECS_BETWEEN_REQS_ASSETS = toString cfg.secondsBetweenRequestsAssets;
         USE_BYRON_WALLET = if cfg.useByronWallet then "TRUE" else "FALSE";
         USE_RECAPTCHA_ON_ANON = if cfg.useRecaptchaOnAnon then "TRUE" else "FALSE";
         WALLET_API = cfg.walletApi;

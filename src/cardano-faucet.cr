@@ -35,6 +35,8 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
   Log.info { "Listening on http://#{address}" }
 
   Log.info { "ANONYMOUS_ACCESS: #{ANONYMOUS_ACCESS}" }
+  Log.info { "ANONYMOUS_ACCESS_ASSETS: #{ANONYMOUS_ACCESS_ASSETS}" }
+  Log.info { "ASSETS_TO_GIVE_ANON: #{ASSETS_TO_GIVE_ANON}" }
   Log.info { "CARDANO_ENV: #{CARDANO_ENV}" }
   Log.info { "FAUCET_API_KEY_PATH: #{FAUCET_API_KEY_PATH}" }
   Log.info { "FAUCET_FRONTEND_URL: #{FAUCET_FRONTEND_URL}" }
@@ -51,6 +53,7 @@ DB.open "sqlite3://last-seen.sqlite" do |db|
   Log.info { "RATE_LIMIT_ON_SUCCESS: #{RATE_LIMIT_ON_SUCCESS}" }
   Log.info { "SECS_BETWEEN_REQS_ANON: #{SECS_BETWEEN_REQS_ANON}" }
   Log.info { "SECS_BETWEEN_REQS_APIKEY: #{SECS_BETWEEN_REQS_APIKEY}" }
+  Log.info { "SECS_BETWEEN_REQS_ASSETS: #{SECS_BETWEEN_REQS_ASSETS}" }
   Log.info { "USE_BYRON_WALLET: #{USE_BYRON_WALLET}" }
   Log.info { "USE_RECAPTCHA_ON_ANON: #{USE_RECAPTCHA_ON_ANON}" }
   Log.info { "WALLET_API: #{WALLET_API}" }
