@@ -16,6 +16,7 @@ let
     sansPrefix = removePrefix (toString ../.) name;
   in (
     baseName == "src" ||
+    baseName == "classes" ||
     hasSuffix ".cr" baseName ||
     hasSuffix ".yml" baseName ||
     hasSuffix ".lock" baseName ||

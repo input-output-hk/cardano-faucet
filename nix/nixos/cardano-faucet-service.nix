@@ -383,7 +383,7 @@ in {
         RATE_LIMIT_ON_SUCCESS = if cfg.rateLimitOnSuccess then "TRUE" else "FALSE";
         SECS_BETWEEN_REQS_ANON = toString cfg.secondsBetweenRequestsAnonymous;
         SECS_BETWEEN_REQS_APIKEY = toString cfg.secondsBetweenRequestsApiKeyAuth;
-        SECS_BETWEEN_REQS_ASSETS = toString cfg.secondsBetweenRequestsAssets;
+        SECS_BETWEEN_REQS_ASSETS = toString cfg.secondsBetweenRequestsAnonymousAssets;
         USE_BYRON_WALLET = if cfg.useByronWallet then "TRUE" else "FALSE";
         USE_RECAPTCHA_ON_ANON = if cfg.useRecaptchaOnAnon then "TRUE" else "FALSE";
         WALLET_API = cfg.walletApi;

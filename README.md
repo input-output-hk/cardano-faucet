@@ -47,7 +47,7 @@ $ curl -XPOST "http[s]://FQDN/send-money/$ADDRESS?asset=$UNIT_TYPE"
 {
   "success": true,
   "amount": 2,
-  "unit": "6b8d07d69639e9413dd637a1a815a7323c69c86abbafb66dbfdb1aa7:",
+  "unit": "6b8d07d69639e9413dd637a1a815a7323c69c86abbafb66dbfdb1aa7",
   "fee": 172585,
   "minLovelace":1407406,
   "txid":"5f97ce363e0b9f898a29fc83244279f3d971fd9acae2514d0f357305691449bf"
