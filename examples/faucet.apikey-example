@@ -1,30 +1,61 @@
 # This file contains faucet API keys to exempt send money requests from rate-limiting.
 #
-# Comment lines start with a hash; blank or white spaced lines are allowed.
+# In an editor like Vim, this file is viewed best without line wrapping: `:set wrap!`
+#
+#
+# API Key Table Description:
+# --------------------------
+#
+# Comment lines start with a hash and blank or white spaced lines are allowed.
 #
 # Each API key record will occupy one line, having white space separated required fields of:
-#  1) The API key, which must be 32 alphanumeric characters
-#  2) The API key's faucet transfer value per Tx (integer > 0, in Lovelaces)
-#  3) The API key's rate limit period (integer >= 0, 1 Tx per <THIS MANY> seconds)
+#  1, API key       ):  The API key, which must be 32 alphanumeric characters
+#  2, UNITS_PER_TX  ):  The API key's faucet transfer value in units per tx for its unit type (integer > 0, in UNIT_TYPE)
+#  3, PERIOD_PER_TX ):  The API key's rate limit period (integer >= 0, 1 Tx per <THIS MANY> seconds)
+#  4, UNIT_TYPE     ):  The API key's unit type for funding, either: "lovelace" or a ${POLICY_ID}${ASSET_NAME} string where:
+#     * The ${POLICY_ID} is a 56 character hex string for the asset policy id
+#     * The ${ASSET_NAME} is <= 64 character hex string for the asset's policy id asset name
+#     * NOTE: The ${ASSET_NAME} is NOT the asset's metadata name, but a policy sub-identifier of the asset!
 #
-# Fields (2) and (3) can also use the word "default" (without quotes) to utilize the
-# default LOVELACES_TO_GIVE_APIKEY and SECS_BETWEEN_REQS_APIKEY parameters.
-
+# When the UNIT_TYPE is lovelace, instead of a positive integer, fields (2) and (3)
+# can use the word "default" (without quotes) to utilize the default LOVELACES_TO_GIVE_APIKEY and
+# SECS_BETWEEN_REQS_APIKEY parameters.
+#
 # An optional comment can follow the required fields with a default API_KEY_COMMENT_MAX_LEN of 64.
 #
-# The parameter key-value pair to submit is `apiKey=$KEY`, such as:
-#   curl -v -XPOST "http[s]://FQDN/send-money/$ADDRESS?apiKey=$KEY"
+# If the unit type is not "lovelace", then the UNITS_PER_TX field represents the units to
+# transfer of the UNIT_TYPE associated with the API key
 #
-# API keys can be generated with:
+# Additional API keys can be generated with:
 #   NUM=10; for i in $(seq 1 $NUM); do tr -cd 'A-Za-z0-9' < /dev/urandom | head -c 32; echo; done
+#
+#
+# Usage:
+# ------
+#
+# To request funds using defaults when anonymous access is allowed:
+#   curl -v -XPOST "http[s]://$FQDN:$PORT/send-money/$ADDRESS"
+#
+# To request funds with an API key, the parameter key-value pair to submit is `apiKey=$KEY`:
+#   curl -v -XPOST "http[s]://$FQDN:$PORT/send-money/$ADDRESS?apiKey=$KEY"
+#
+# To request funds for a non-ADA asset, the parameter key-value pair to submit is `asset=$UNIT_TYPE`:
+#   curl -v -XPOST "http[s]://$FQDN:$PORT/send-money/$ADDRESS?asset=$UNIT_TYPE"
+#
+#
+# If both a valid API key and an asset parameter are provided, the API key will take precedence.
+#
 #
 # Example formatting below:
 
-# API Key ([:alnum:]{32})           LOVELACES_PER_TX    PERIOD_PER_TX   OPTIONAL_COMMENT
-kRl9TACrYmXaPKQ5sRm8on2lB7Pi03aG    1000000000          0               DevOps
-x73AajBcMOj1ibk7r7buLNgJKdL5ilDe    1000000000          86400           Company1 - Testing
-TCTMjii8al13esthArVQH3IXwU5ES9l8    1000000             3600            Company2
-5fGmc1byLVLLtEQAKtH3O8ZfSxrppPBw    default             default         User1 - Default value and period
-1TtL0yOeVUw6es6HXfXMFdJ66Mj8f7bI    default             7200            User2 - Default value, custom period
-BxXdHq6OxJrIbcto32lK0h3oaeXq663d    50000000000         default         User3 - Custom value, default period
-8L0acDZoGFyIFbtTuJNi8pPFVbcCtUfI    10000000000         21600
+# API Key ([:alnum:]{32})           UNITS_PER_TX        PERIOD_PER_TX   UNIT_TYPE (lovelace for Cardano, or ${POLICY_ID}{ASSET_NAME} for an asset)                                                  OPTIONAL_COMMENT
+kRl9TACrYmXaPKQ5sRm8on2lB7Pi03aG    1000000000          0               lovelace                                                                                                                    DevOps
+x73AajBcMOj1ibk7r7buLNgJKdL5ilDe    1000000000          86400           lovelace                                                                                                                    Company1 - Testing
+TCTMjii8al13esthArVQH3IXwU5ES9l8    1000000             3600            lovelace                                                                                                                    Company2
+5fGmc1byLVLLtEQAKtH3O8ZfSxrppPBw    default             default         lovelace                                                                                                                    User1 - Default value and period
+1TtL0yOeVUw6es6HXfXMFdJ66Mj8f7bI    default             7200            lovelace                                                                                                                    User2 - Default value, custom period
+BxXdHq6OxJrIbcto32lK0h3oaeXq663d    50000000000         default         lovelace                                                                                                                    User3 - Custom value, default period
+8L0acDZoGFyIFbtTuJNi8pPFVbcCtUfI    10000000000         21600           lovelace
+EiYaGF93A2JoCNgZNccsgVP0K3KrBfvI    1000000             30              lovelace                                                                                                                    Test key
+Tve8IVfQaTDtxVH7wq5ubBed4boodmes    100                 86400           8e294b2ed89dcd0d3e6dafa59fc55c5598f7fcea453d214c5ddae7412c983f203f92f501efc3b93ce1b20a54e4e6cdbdc53f46c1ac4a238cd37b949c    Example asset with asset_name
+I6K8l7d1ez9j9UqwhviiPykMOD9VKHmN    3                   60              6b8d07d69639e9413dd637a1a815a7323c69c86abbafb66dbfdb1aa7                                                                    Megacoin asset with no asset_name
