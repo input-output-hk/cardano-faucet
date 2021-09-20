@@ -266,7 +266,7 @@ in {
       in [
         completions
         defaultPkgs.cardano-cli
-        defaultPkgs.cardano-wallet
+        cfg.walletPackage
         pkgs.jq
       ];
 
@@ -424,7 +424,7 @@ in {
         fi
 
         if ! [ -s faucet.id ]; then
-          ${defaultPackages.create-faucet-wallet} \
+          ${defaultPackages.create-faucet-wallet.override { cardano-wallet = cfg.walletPackage; }} \
             -e ${if cfg.useByronWallet then "byron" else "shelley"} \
             -m ./faucet.mnemonic \
             -p ./faucet.passphrase
@@ -432,7 +432,7 @@ in {
       '';
 
       path = [
-        defaultPkgs.cardano-wallet
+        cfg.walletPackage
         pkgs.sudo
       ];
     };
