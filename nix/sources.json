@@ -1,26 +1,26 @@
 {
     "cardano-node": {
-        "branch": "refs/tags/1.30.0-rc4",
+        "branch": "refs/tags/1.30.1",
         "description": null,
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "45cc256de80551c1df4e6cc3eab0d55143b9b1f2",
-        "sha256": "1alfg2v6b8k79lk0flz31mlg6hqb800vcr7n04yw5f0j7jw56npc",
+        "rev": "0fb43f4e3da8b225f4f86557aed90a183981a64f",
+        "sha256": "0mkir1pg78hp7adxgb8cz6jj4izs07np23fxxnwhkvf0ql92nan7",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/45cc256de80551c1df4e6cc3eab0d55143b9b1f2.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/0fb43f4e3da8b225f4f86557aed90a183981a64f.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-wallet": {
-        "branch": "anviking/ADP-1133/node-1.30.0",
+        "branch": "refs/tags/v2021-09-29",
         "description": "Official Wallet Backend & API for Cardano decentralized",
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-wallet",
-        "rev": "c2bcd50cbe80be6b9a13cd908891f3ae5dbb7b83",
-        "sha256": "1hf34y89a8kgpzgg26hh1m03h9jp7kv2vr3lzcz91ixpf8qgc172",
+        "rev": "6626489542ce442a8451fb46fb5339346e62b4ee",
+        "sha256": "0n1vgbz3m73v33462ifg3qas9djwlpcvi1m0qxc7j15l3w5qhlw5",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-wallet/archive/c2bcd50cbe80be6b9a13cd908891f3ae5dbb7b83.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-wallet/archive/6626489542ce442a8451fb46fb5339346e62b4ee.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "iohk-nix": {
