@@ -6,8 +6,8 @@ let
   inherit (builtins) head;
   sources = import ../sources.nix;
   iohkNix = import sources.iohk-nix {};
-  defaultPackages = (import ../. {}).packages;
-  defaultPkgs = (import ../. {}).pkgs;
+  defaultPackages = defaultPkgs.packages;
+  defaultPkgs = (import ../. {});
 in {
   options.services.cardano-faucet = {
 
