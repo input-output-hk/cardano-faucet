@@ -224,7 +224,7 @@ in {
       default = if cfg.cardanoEnv == "mainnet"
                   then "mainnet"
                 else if cfg.cardanoEnv == "staging"
-                  then "staging"
+                  then "testnet"
                 else if lib.hasPrefix "mainnet_candidate" cfg.cardanoEnv
                   then "staging"
                 else "testnet";
