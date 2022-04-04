@@ -319,7 +319,9 @@ module Cardano
 
       ipPort = context.request.remote_address
       xRealIp = context.request.headers["X-Real-IP"]?
-      ip = Socket::IPAddress.parse("tcp://#{real_ip_port(xRealIp) || ipPort}").address
+      ip = Socket::IPAddress.new(xRealIp || "127.0.0.1", 80).address
+
+
 
       # Log the request details
       if authenticated
