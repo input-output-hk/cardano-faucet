@@ -1,11 +1,21 @@
 {
   description = "Faucet for Cardano";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/d0f9857448e77df50d1e0b518ba0e835b797532a";
+    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+    haskellNix.url = "github:input-output-hk/haskell.nix";
+    iohk-nix = {
+      url = "github:input-output-hk/iohk-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     flake-utils.url = "github:numtide/flake-utils";
-    cardano-node.url = "github:jmgilman/cardano-node";
-    cardano-wallet.url = "github:input-output-hk/cardano-wallet/v2022-10-06";
-    iohk-nix.url = "github:input-output-hk/iohk-nix";
+    cardano-node = {
+      url = "github:jmgilman/cardano-node";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    cardano-wallet = {
+      url = "github:input-output-hk/cardano-wallet/v2022-10-06";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
