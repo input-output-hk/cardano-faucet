@@ -275,7 +275,7 @@ in {
     '';
 
     environment.variables = {
-      CARDANO_NODE_SOCKET_PATH = config.services.cardano-node.socketPath;
+      CARDANO_NODE_SOCKET_PATH = config.services.cardano-node.socketPath 0;
     };
 
     services.cardano-node = {
@@ -320,7 +320,7 @@ in {
                       else cfg.cardanoEnvAttrs.nodeConfig.ByronGenesisFile;
       in ''
         ${cfg.walletPackage}/bin/cardano-wallet serve \
-          --node-socket ${cfgNode.socketPath} \
+          --node-socket ${cfgNode.socketPath 0} \
           --${cfg.walletMode} \
             ${if cfg.walletMode != "mainnet"
               then if (hasInfix "selfnode" cfg.cardanoEnv)
