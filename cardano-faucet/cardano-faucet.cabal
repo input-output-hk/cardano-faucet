@@ -34,6 +34,7 @@ common project-config
                         -Wredundant-constraints
                         -Wunused-packages
                         -Wno-orphans
+                        -Wno-deprecations
 
 common maybe-unix
   if !os(windows)
@@ -65,14 +66,14 @@ library
                       , MissingH
                       , bytestring
                       , cardano-addresses
-                      , cardano-api == 8.8.0.0
+                      , cardano-api
                       , cardano-cli
-                      , cardano-ledger-alonzo >= 1.1.1
-                      , cardano-ledger-byron >= 1.0
-                      , cardano-ledger-binary >= 1.0
-                      , cardano-ledger-core >= 1.2
-                      , cardano-ledger-conway >= 1.1
-                      , cardano-ledger-shelley >= 1.1.1
+                      , cardano-ledger-alonzo
+                      , cardano-ledger-byron
+                      , cardano-ledger-binary
+                      , cardano-ledger-core
+                      , cardano-ledger-conway
+                      , cardano-ledger-shelley
                       , cardano-prelude
                       , containers
                       , either
@@ -83,8 +84,7 @@ library
                       , iproute
                       , network
                       , ouroboros-consensus
-                      , ouroboros-consensus ^>= 0.9
-                      , ouroboros-consensus-cardano ^>= 0.7
+                      , ouroboros-consensus-cardano
                       , ouroboros-consensus-protocol ^>= 0.5
                       , ouroboros-network-api
                       , ouroboros-network ^>= 0.8.2.0

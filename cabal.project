@@ -14,7 +14,7 @@ repository cardano-haskell-packages
 -- you need to run if you change them
 index-state:
   , hackage.haskell.org 2023-07-10T14:55:34Z
-  , cardano-haskell-packages 2023-07-30T00:00:00Z
+  , cardano-haskell-packages 2023-09-01T11:43:46Z
 
 packages:
     cardano-faucet
@@ -25,9 +25,6 @@ allow-newer:
   size-based:template-haskell,
   attoparsec,
   text
-
-constraints:
-    optparse-applicative-fork ^>= 0.16
 
 test-show-details: direct
 
@@ -60,3 +57,18 @@ source-repository-package
     --sha256: sha256-7IxvCwWC/2h87D+/l7Mu0hHoQMTZir03iFLukaE5FP8=
     subdir: command-line
             core
+
+source-repository-package
+    type: git
+    location: https://github.com/input-output-hk/cardano-node
+    tag: 40fb1d3bb1450ca303883db5e528150363bcbcaf
+    --sha256: sha256-9Atw08l+ez+vKyDev2A5qal1t1DTr6cyEoJANJ9ehN4=
+    subdir: cardano-node
+
+-- branch: mgalazyn/release/8.6.1.0
+source-repository-package
+    type: git
+    location: https://github.com/input-output-hk/cardano-cli.git
+    tag: bf0a31fd7feef9d3164e623aa4c6cb60c1014c12
+    --sha256: sha256-5C7uevuvoJIPW9l3qMw9hl6h2ZxFMpLgzG30KxPrL7M=
+    subdir: cardano-cli
