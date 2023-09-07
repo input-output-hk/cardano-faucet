@@ -40,13 +40,8 @@ common maybe-unix
   if !os(windows)
      build-depends:    unix
 
-common maybe-Win32
-  if os(windows)
-     build-depends:    Win32
-
 library
   import:               base, project-config
-                      , maybe-Win32
 
   if flag(unexpected_thunks)
     cpp-options: -DUNEXPECTED_THUNKS
@@ -68,12 +63,6 @@ library
                       , cardano-addresses
                       , cardano-api
                       , cardano-cli ^>= 8.6.1.0
-                      , cardano-ledger-alonzo
-                      , cardano-ledger-byron
-                      , cardano-ledger-binary
-                      , cardano-ledger-core
-                      , cardano-ledger-conway
-                      , cardano-ledger-shelley
                       , cardano-prelude
                       , containers
                       , either
@@ -84,11 +73,6 @@ library
                       , iproute
                       , network
                       , ouroboros-consensus
-                      , ouroboros-consensus-cardano
-                      , ouroboros-consensus-protocol ^>= 0.5
-                      , ouroboros-network-api
-                      , ouroboros-network ^>= 0.8.2.0
-                      , ouroboros-network-framework ^>= 0.7
                       , ouroboros-network-protocols
                       , parsec
                       , servant-client
@@ -97,7 +81,6 @@ library
                       , stm
                       , text
                       , time
-                      , transformers
                       , transformers-except
                       , warp
 
