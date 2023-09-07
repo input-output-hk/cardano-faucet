@@ -8,3 +8,4 @@ dist-newstyle/
 dist-profiled/
 dist/
 result*
+.direnv
