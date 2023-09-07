@@ -14,7 +14,7 @@ repository cardano-haskell-packages
 -- you need to run if you change them
 index-state:
   , hackage.haskell.org 2023-07-10T14:55:34Z
-  , cardano-haskell-packages 2023-07-30T00:00:00Z
+  , cardano-haskell-packages 2023-09-07T16:00:00Z
 
 packages:
     cardano-faucet
@@ -25,9 +25,6 @@ allow-newer:
   size-based:template-haskell,
   attoparsec,
   text
-
-constraints:
-    optparse-applicative-fork ^>= 0.16
 
 test-show-details: direct
 

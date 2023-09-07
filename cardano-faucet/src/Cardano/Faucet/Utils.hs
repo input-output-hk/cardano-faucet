@@ -7,7 +7,6 @@
 module Cardano.Faucet.Utils where
 
 import Cardano.Api (TxIn, TxOut(TxOut), CtxUTxO, Lovelace, CardanoEra, TxFee, txFeesExplicitInEra, TxFee(TxFeeImplicit, TxFeeExplicit), anyCardanoEra, TxValidityLowerBound(TxValidityNoLowerBound), TxValidityUpperBound(TxValidityNoUpperBound), validityNoUpperBoundSupportedInEra)
-import Cardano.Api.Shelley ()
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types
 import Cardano.Prelude hiding ((%))

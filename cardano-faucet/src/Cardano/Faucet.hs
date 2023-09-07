@@ -18,13 +18,13 @@ module Cardano.Faucet (main) where
 
 import Cardano.Address.Derivation (Depth(AccountK), XPrv)
 import Cardano.Address.Style.Shelley (getKey, Shelley)
-import Cardano.Api (TxInMode, CardanoMode, AddressAny, EraInMode, IsShelleyBasedEra, QueryInMode(QueryInEra, QueryCurrentEra), UTxO(unUTxO), QueryUTxOFilter(QueryUTxOByAddress), BlockInMode, ChainPoint, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), LocalNodeConnectInfo(LocalNodeConnectInfo), LocalNodeClientProtocols(LocalNodeClientProtocols, localChainSyncClient, localStateQueryClient, localTxSubmissionClient, localTxMonitoringClient), toEraInMode, ConsensusMode(CardanoMode), QueryInEra(QueryInShelleyBasedEra), QueryInShelleyBasedEra(QueryUTxO, QueryStakeAddresses), LocalStateQueryClient(LocalStateQueryClient), ConsensusModeIsMultiEra(CardanoModeIsMultiEra), cardanoEraStyle, connectToLocalNode, LocalChainSyncClient(NoLocalChainSyncClient), SigningKey(PaymentExtendedSigningKey), getVerificationKey, Lovelace, serialiseAddress,  ShelleyWitnessSigningKey(WitnessPaymentExtendedKey), File(File))
+import Cardano.Api (TxInMode, CardanoMode, AddressAny, EraInMode, IsShelleyBasedEra, QueryInMode(QueryInEra, QueryCurrentEra), UTxO(unUTxO), QueryUTxOFilter(QueryUTxOByAddress), BlockInMode, ChainPoint, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), LocalNodeConnectInfo(LocalNodeConnectInfo), LocalNodeClientProtocols(LocalNodeClientProtocols, localChainSyncClient, localStateQueryClient, localTxSubmissionClient, localTxMonitoringClient), toEraInMode, ConsensusMode(CardanoMode), QueryInEra(QueryInShelleyBasedEra), QueryInShelleyBasedEra(QueryUTxO, QueryStakeAddresses), LocalStateQueryClient(LocalStateQueryClient), ConsensusModeIsMultiEra(CardanoModeIsMultiEra), cardanoEraStyle, connectToLocalNode, LocalChainSyncClient(NoLocalChainSyncClient), SigningKey(PaymentExtendedSigningKey), getVerificationKey, Lovelace, serialiseAddress,  ShelleyWitnessSigningKey(WitnessPaymentExtendedKey), File(File), AddressAny(AddressShelley))
 import Cardano.Api.Byron ()
 --import Cardano.CLI.Run.Friendly (friendlyTxBS)
 import Cardano.Api.Shelley (makeStakeAddress, StakeCredential(StakeCredentialByKey), verificationKeyHash, castVerificationKey, SigningKey(StakeExtendedSigningKey), StakeAddress, PoolId, NetworkId, StakeExtendedKey, queryExpr, LocalStateQueryExpr, determineEraExpr, CardanoEra, CardanoEra(ConwayEra, ShelleyEra, AllegraEra, AlonzoEra, MaryEra, BabbageEra, ByronEra), shelleyBasedEra, IsCardanoEra, LocalTxMonitorClient(..), SlotNo, UnsupportedNtcVersionError)
-import Cardano.CLI.Shelley.Run.Address
+import Cardano.CLI.Legacy.Run.Address (buildShelleyAddress)
 import Cardano.Faucet.Misc
-import Cardano.Faucet.Types
+import Cardano.Faucet.Types (FaucetState(..), FaucetConfigFile(..), FaucetValue, FaucetError(..), StakeKeyIntermediateState(..), StakeKeyState(..), accountKeyToStakeKey, parseConfig, mnemonicToRootKey, rootKeytoAcctKey, renderFaucetError, accountKeyToPaymentKey)
 import Cardano.Faucet.Utils
 import Cardano.Faucet.Web
 import Cardano.Prelude hiding ((%))
@@ -243,10 +243,10 @@ newFaucetState fsConfig fsTxQueue = do
     pay_skey = PaymentExtendedSigningKey $ getKey addrK
     pay_vkey = getVerificationKey pay_skey
     fsPaymentSkey = WitnessPaymentExtendedKey pay_skey
-    fsPaymentVkey = APaymentExtendedVerificationKey pay_vkey
+    fsPaymentVkey = pay_vkey
     fsBucketSizes = findAllSizes fsConfig
     fsNetwork = fcfNetwork fsConfig
-  fsOwnAddress <- withExceptT FaucetErrorShelleyAddr $ vkeyToAddr fsNetwork fsPaymentVkey
+  fsOwnAddress <- withExceptT FaucetErrorShelleyAddr $ AddressShelley <$> buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork
   pure $ FaucetState{..}
 
 _newQueryClient :: Port -> FaucetConfigFile -> TQueue (TxInMode CardanoMode, ByteString) -> LocalStateQueryExpr block point (QueryInMode CardanoMode) r IO ()

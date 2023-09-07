@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImportQualifiedPost #-}
@@ -14,10 +15,8 @@
 
 module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest(..)) where
 
-import Cardano.Api (CardanoEra, IsShelleyBasedEra, TxInMode(TxInMode), Lovelace(Lovelace), IsCardanoEra, TxCertificates(TxCertificatesNone), serialiseAddress, SigningKey(PaymentExtendedSigningKey), PaymentExtendedKey)
-import Cardano.Api.Shelley (StakeCredential, PoolId, TxCertificates(TxCertificates), certificatesSupportedInEra, BuildTxWith(BuildTxWith), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForStakeAddr), StakeExtendedKey, serialiseToBech32, AssetId(AssetId, AdaAssetId), PolicyId(PolicyId), serialiseToRawBytesHexText, AssetName(AssetName), TxMintValue(TxMintNone, TxMintValue), AddressAny, multiAssetSupportedInEra, valueFromList, ScriptWitness(SimpleScriptWitness), SimpleScript(RequireSignature), SimpleScriptOrReferenceInput(SScript), scriptLanguageSupportedInEra, ScriptLanguage(SimpleScriptLanguage), shelleyBasedEra, Tx, TxId, verificationKeyHash, getVerificationKey, castVerificationKey, VerificationKey, Quantity(Quantity), scriptPolicyId, TxOut(TxOut), TxOutValue(TxOutAdaOnly, TxOutValue), lovelaceToValue, negateValue, Value, BuildTx, CtxUTxO, WitCtxMint, Script(SimpleScript), SimpleScript, SimpleScript', ShelleyWitnessSigningKey(WitnessPaymentExtendedKey, WitnessStakeExtendedKey), makeStakeAddressPoolDelegationCertificate)
-import Cardano.CLI.Run.Friendly (friendlyTxBS)
-import Cardano.CLI.Shelley.Run.Transaction ()
+import Cardano.Api (CardanoEra, IsShelleyBasedEra, TxInMode(TxInMode), Lovelace(Lovelace), IsCardanoEra, TxCertificates(TxCertificatesNone), serialiseAddress, SigningKey(PaymentExtendedSigningKey), PaymentExtendedKey, makeStakeAddressPoolDelegationCertificate)
+import Cardano.Api.Shelley (StakeCredential, PoolId, TxCertificates(TxCertificates), certificatesSupportedInEra, BuildTxWith(BuildTxWith), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForStakeAddr), StakeExtendedKey, serialiseToBech32, AssetId(AssetId, AdaAssetId), PolicyId(PolicyId), serialiseToRawBytesHexText, AssetName(AssetName), TxMintValue(TxMintNone, TxMintValue), AddressAny, multiAssetSupportedInEra, valueFromList, ScriptWitness(SimpleScriptWitness), SimpleScript(RequireSignature), SimpleScriptOrReferenceInput(SScript), scriptLanguageSupportedInEra, ScriptLanguage(SimpleScriptLanguage), shelleyBasedEra, Tx, TxId, verificationKeyHash, getVerificationKey, castVerificationKey, VerificationKey, Quantity(Quantity), scriptPolicyId, TxOut(TxOut), TxOutValue(TxOutAdaOnly, TxOutValue), lovelaceToValue, negateValue, Value, BuildTx, CtxUTxO, WitCtxMint, Script(SimpleScript), SimpleScript, SimpleScript', ShelleyWitnessSigningKey(WitnessPaymentExtendedKey, WitnessStakeExtendedKey))
 import Cardano.Faucet.Misc (convertEra, parseAddress, toFaucetValue, faucetValueToLovelace, stripMintingTokens)
 import Cardano.Faucet.TxUtils (makeAndSignTx, Fee(..))
 import Cardano.Faucet.Types (CaptchaToken, ForwardedFor(..), SendMoneyReply(..), DelegationReply(..), SiteVerifyReply(..), SiteVerifyRequest(..), SecretKey, FaucetState(..), ApiKeyValue(..), RateLimitResult(..), ApiKey(..), RateLimitAddress(..), UtxoStats(..), FaucetValue(..), FaucetConfigFile(..), FaucetWebError(..), SiteKey(..), SendMoneySent(..), FaucetToken(FaucetToken, FaucetMintToken), rootKeyToPolicyKey)
@@ -43,7 +42,8 @@ import Servant
 import Servant.Client (ClientM, ClientError, client, runClientM, mkClientEnv, BaseUrl(BaseUrl), Scheme(Https))
 import Cardano.Address.Style.Shelley (Shelley, getKey)
 import Cardano.Address.Derivation (Depth(PolicyK), XPrv)
-import Cardano.CLI.Types (TxOutAnyEra(TxOutAnyEra), TxOutDatumAnyEra(TxOutDatumByNone), ReferenceScriptAnyEra(ReferenceScriptAnyEraNone))
+import Cardano.CLI.Json.Friendly (friendlyTxBS)
+import Cardano.CLI.Types.Common
 
 -- create recaptcha api keys at https://www.google.com/recaptcha/admin
 -- reCAPTCHA v2, "i am not a robot"

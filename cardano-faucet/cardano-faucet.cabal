@@ -1,7 +1,7 @@
 cabal-version: 3.0
 
 name:                   cardano-faucet
-version:                8.2
+version:                8.3
 description:            The Cardano command-line interface.
 author:                 IOHK
 maintainer:             operations@iohk.io
@@ -34,18 +34,14 @@ common project-config
                         -Wredundant-constraints
                         -Wunused-packages
                         -Wno-orphans
+                        -Wno-deprecations
 
 common maybe-unix
   if !os(windows)
      build-depends:    unix
 
-common maybe-Win32
-  if os(windows)
-     build-depends:    Win32
-
 library
   import:               base, project-config
-                      , maybe-Win32
 
   if flag(unexpected_thunks)
     cpp-options: -DUNEXPECTED_THUNKS
@@ -65,14 +61,8 @@ library
                       , MissingH
                       , bytestring
                       , cardano-addresses
-                      , cardano-api == 8.8.0.0
-                      , cardano-cli
-                      , cardano-ledger-alonzo >= 1.1.1
-                      , cardano-ledger-byron >= 1.0
-                      , cardano-ledger-binary >= 1.0
-                      , cardano-ledger-core >= 1.2
-                      , cardano-ledger-conway >= 1.1
-                      , cardano-ledger-shelley >= 1.1.1
+                      , cardano-api
+                      , cardano-cli ^>= 8.6.1.0
                       , cardano-prelude
                       , containers
                       , either
@@ -83,12 +73,6 @@ library
                       , iproute
                       , network
                       , ouroboros-consensus
-                      , ouroboros-consensus ^>= 0.9
-                      , ouroboros-consensus-cardano ^>= 0.7
-                      , ouroboros-consensus-protocol ^>= 0.5
-                      , ouroboros-network-api
-                      , ouroboros-network ^>= 0.8.2.0
-                      , ouroboros-network-framework ^>= 0.7
                       , ouroboros-network-protocols
                       , parsec
                       , servant-client
@@ -97,7 +81,6 @@ library
                       , stm
                       , text
                       , time
-                      , transformers
                       , transformers-except
                       , warp
 
