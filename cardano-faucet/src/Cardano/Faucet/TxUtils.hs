@@ -4,24 +4,25 @@
 
 module Cardano.Faucet.TxUtils where
 
-import Cardano.Api (Lovelace, IsShelleyBasedEra, ShelleyBasedEra, TxIn, TxOut(TxOut), CtxUTxO, TxBody, TxBodyContent(TxBodyContent), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForSpending), TxInsCollateral(TxInsCollateralNone), TxInsReference(TxInsReferenceNone), TxTotalCollateral(TxTotalCollateralNone), TxReturnCollateral(TxReturnCollateralNone), TxMetadataInEra(TxMetadataNone), TxAuxScripts(TxAuxScriptsNone), TxExtraKeyWitnesses(TxExtraKeyWitnessesNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates, BuildTxWith(BuildTxWith), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(..), TxScriptValidity(TxScriptValidityNone), shelleyBasedToCardanoEra, Tx, makeShelleyKeyWitness, makeSignedTransaction, TxId, getTxId, BuildTx, ShelleyWitnessSigningKey, AddressAny)
-import Cardano.Api.Shelley (lovelaceToValue, Value, createAndValidateTransactionBody, TxGovernanceActions(TxGovernanceActionsNone), TxVotes(TxVotesNone))
+import Cardano.Api (ShelleyBasedEra, TxIn, TxOut(TxOut), CtxUTxO, TxBody, TxBodyContent(TxBodyContent), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForSpending), TxInsCollateral(TxInsCollateralNone), TxInsReference(TxInsReferenceNone), TxTotalCollateral(TxTotalCollateralNone), TxReturnCollateral(TxReturnCollateralNone), TxMetadataInEra(TxMetadataNone), TxAuxScripts(TxAuxScriptsNone), TxExtraKeyWitnesses(TxExtraKeyWitnessesNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates, BuildTxWith(BuildTxWith), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(..), TxScriptValidity(TxScriptValidityNone), defaultTxValidityUpperBound, docToText, Tx, makeShelleyKeyWitness, makeSignedTransaction, TxId, getTxId, BuildTx, ShelleyWitnessSigningKey, AddressAny, TxValidityLowerBound (TxValidityNoLowerBound))
+import qualified Cardano.Api.Ledger as L
+import Cardano.Api.Shelley (lovelaceToValue, Value, createAndValidateTransactionBody)
 import Cardano.Faucet.Misc (getValue, faucetValueToLovelace)
 import Cardano.Faucet.Types (FaucetWebError(..), FaucetValue)
 import Cardano.Faucet.Utils
 import Cardano.Prelude hiding ((%))
 import Control.Monad.Trans.Except.Extra (left)
 import Cardano.CLI.Types.Common
-import Cardano.CLI.Legacy.Run.Transaction
-import Cardano.CLI.Types.Errors.ShelleyTxCmdError
+import Cardano.CLI.EraBased.Run.Transaction
+import Cardano.CLI.Types.Errors.TxCmdError
 
 getMintedValue :: TxMintValue BuildTx era -> Value
 getMintedValue (TxMintValue _ val _) = val
 getMintedValue (TxMintNone) = mempty
 
-newtype Fee = Fee Lovelace
+newtype Fee = Fee L.Coin
 
-txBuild :: IsShelleyBasedEra era
+txBuild :: ()
   => ShelleyBasedEra era
   -> (TxIn, TxOut CtxUTxO era)
   -> Either AddressAny [TxOutAnyEra]
@@ -32,12 +33,11 @@ txBuild :: IsShelleyBasedEra era
 txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
   let
     --localNodeConnInfo = LocalNodeConnectInfo cModeParams networkId sockPath
-    era = shelleyBasedToCardanoEra sbe
     unwrap :: TxOut ctx1 era1 -> FaucetValue
     unwrap (TxOut _ val _ _) = getValue val
-    value :: Lovelace
+    value :: L.Coin
     value = faucetValueToLovelace $ unwrap txout
-    change :: Lovelace
+    change :: L.Coin
     change = value - fixedFee
     mintedValue = getMintedValue minting
     -- TODO, add minted tokens
@@ -52,11 +52,12 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
     <$> pure [(txin, BuildTxWith $ KeyWitness KeyWitnessForSpending)]
     <*> pure TxInsCollateralNone
     <*> pure TxInsReferenceNone
-    <*> mapM (\x -> withExceptT (FaucetWebErrorTodo . renderShelleyTxCmdError) $ toTxOutInAnyEra era x) (getTxOuts addressOrOutputs)
+    <*> mapM (\x -> withExceptT (FaucetWebErrorTodo . docToText . renderTxCmdError) $ toTxOutInAnyEra sbe x) (getTxOuts addressOrOutputs)
     <*> pure TxTotalCollateralNone
     <*> pure TxReturnCollateralNone
-    <*> validateTxFee era (Just fixedFee)
-    <*> noBoundsIfSupported era
+    <*> validateTxFee sbe (Just fixedFee)
+    <*> pure TxValidityNoLowerBound
+    <*> pure (defaultTxValidityUpperBound sbe)
     <*> pure TxMetadataNone
     <*> pure TxAuxScriptsNone
     <*> pure TxExtraKeyWitnessesNone
@@ -66,10 +67,10 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
     <*> pure TxUpdateProposalNone
     <*> pure minting
     <*> pure TxScriptValidityNone
-    <*> pure TxGovernanceActionsNone
-    <*> pure TxVotesNone
+    <*> pure Nothing
+    <*> pure Nothing
 
-  case createAndValidateTransactionBody txBodyContent of
+  case createAndValidateTransactionBody sbe txBodyContent of
     Left err -> left $ FaucetWebErrorTodo $ show err
     Right txbody -> pure txbody
   {-
@@ -114,17 +115,18 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
   return balancedTxBody
   -}
 
-txSign :: IsShelleyBasedEra era
-  => TxBody era
+txSign :: ()
+  => ShelleyBasedEra era
+  -> TxBody era
   -> [ShelleyWitnessSigningKey]
   -> Tx era
-txSign txBody sks = tx
+txSign era txBody sks = tx
   --let (sksByron, sksShelley) = partitionSomeWitnesses $ map categoriseSomeWitness sks
   where
-    shelleyKeyWitnesses = map (makeShelleyKeyWitness txBody) sks
+    shelleyKeyWitnesses = map (makeShelleyKeyWitness era txBody) sks
     tx = makeSignedTransaction shelleyKeyWitnesses txBody
 
-makeAndSignTx :: IsShelleyBasedEra era
+makeAndSignTx :: ()
   => ShelleyBasedEra era
   -> (TxIn, TxOut CtxUTxO era)
   -> Either AddressAny [TxOutAnyEra]
@@ -140,5 +142,5 @@ makeAndSignTx sbe txinout addressOrOutputs skeys certs minting fee = do
   let
     txid :: TxId
     txid = getTxId unsignedTx
-    signedTx = txSign unsignedTx skeys
+    signedTx = txSign sbe unsignedTx skeys
   pure (signedTx, txid)
