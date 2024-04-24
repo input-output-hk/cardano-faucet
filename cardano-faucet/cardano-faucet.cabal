@@ -62,7 +62,7 @@ library
                       , bytestring
                       , cardano-addresses
                       , cardano-api
-                      , cardano-cli ^>= 8.6.1.0
+                      , cardano-cli ^>= 8.22
                       , cardano-prelude
                       , containers
                       , either

@@ -13,8 +13,8 @@ repository cardano-haskell-packages
 -- See CONTRIBUTING for information about these, including some Nix commands
 -- you need to run if you change them
 index-state:
-  , hackage.haskell.org 2023-07-10T14:55:34Z
-  , cardano-haskell-packages 2023-09-07T16:00:00Z
+  , hackage.haskell.org 2024-03-26T06:28:59Z
+  , cardano-haskell-packages 2024-04-11T09:29:53Z
 
 packages:
     cardano-faucet
@@ -53,7 +53,7 @@ package cardano-faucet
 source-repository-package
     type: git
     location: https://github.com/input-output-hk/cardano-addresses
-    tag: ca49ed0a7e8c1205f270099a28ee6659cd1a22d7
-    --sha256: sha256-7IxvCwWC/2h87D+/l7Mu0hHoQMTZir03iFLukaE5FP8=
+    tag: ed83fe7457da9adb53bb92acd0e79c321bd25646
+    --sha256: sha256-saxnZMeeZcASesw2Fgg9X0I8YFQ7p8jD25TMt782i2s=
     subdir: command-line
             core
