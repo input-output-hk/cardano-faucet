@@ -2,8 +2,9 @@
 
 module Cardano.Faucet.Misc where
 
-import Cardano.Api (ConsensusModeParams(CardanoModeParams), CardanoMode, EpochSlots(EpochSlots), AddressAny, parseAddressAny, TxOutValue(TxOutAdaOnly, TxOutValue), CardanoEra, EraInMode, toEraInMode, ConsensusMode(CardanoMode),AssetId(AdaAssetId), Quantity, valueToList)
-import Cardano.Api.Shelley (Lovelace, selectLovelace, AssetId(AssetId))
+import Cardano.Api (ConsensusModeParams(CardanoModeParams), EpochSlots(EpochSlots), AddressAny, parseAddressAny, TxOutValue(..), AssetId(AdaAssetId), Quantity, fromLedgerValue, valueToList)
+import qualified Cardano.Api.Ledger as L
+import Cardano.Api.Shelley (selectLovelace, AssetId(AssetId))
 import Cardano.Faucet.Types
 import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (left)
@@ -11,16 +12,17 @@ import Data.Text qualified as T
 import Text.Parsec
 
 getValue :: TxOutValue era -> FaucetValue
-getValue (TxOutAdaOnly _ ll) = Ada ll
-getValue (TxOutValue _ val) = convertRemaining remaining
+getValue (TxOutValueByron ll) = Ada ll
+getValue (TxOutValueShelleyBased sbe val) = convertRemaining remaining
   where
-    ll :: Lovelace
-    ll = selectLovelace val
+    apiValue = fromLedgerValue sbe val
+    ll :: L.Coin
+    ll = selectLovelace apiValue
     isntAda :: (AssetId, Quantity) -> Bool
     isntAda (AdaAssetId, _) = False
     isntAda (AssetId _ _, _) = True
     remaining :: [(AssetId, Quantity)]
-    remaining = filter isntAda (valueToList val)
+    remaining = filter isntAda (valueToList apiValue)
     convertRemaining :: [(AssetId, Quantity)] -> FaucetValue
     convertRemaining [t] = FaucetValueMultiAsset ll (FaucetToken t)
     convertRemaining [] = Ada ll
@@ -37,7 +39,7 @@ stripMintingTokens (FaucetValueMultiAsset ll (FaucetMintToken _)) = Ada ll
 stripMintingTokens fv@(FaucetValueManyTokens _) = fv
 
 -- returns just the lovelace component and ignores tokens
-faucetValueToLovelace :: FaucetValue -> Lovelace
+faucetValueToLovelace :: FaucetValue -> L.Coin
 faucetValueToLovelace (Ada ll) = ll
 faucetValueToLovelace (FaucetValueMultiAsset ll _token) = ll
 faucetValueToLovelace (FaucetValueManyTokens ll) = ll
@@ -47,13 +49,8 @@ parseAddress addr = case parse (parseAddressAny <* eof) "" (T.unpack addr) of
   Right a -> return $ a
   Left e -> left $ FaucetWebErrorInvalidAddress addr (show e)
 
-defaultCModeParams :: ConsensusModeParams CardanoMode
+defaultCModeParams :: ConsensusModeParams
 defaultCModeParams = CardanoModeParams (EpochSlots defaultByronEpochSlots)
 
 defaultByronEpochSlots :: Word64
 defaultByronEpochSlots = 21600
-
-convertEra :: Monad m => CardanoEra era -> ExceptT FaucetWebError m (EraInMode era CardanoMode)
-convertEra era = case (toEraInMode era CardanoMode) of
-  Just eraInMode -> pure eraInMode
-  Nothing -> left $ FaucetWebErrorEraConversion

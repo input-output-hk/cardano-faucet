@@ -18,11 +18,12 @@ module Cardano.Faucet (main) where
 
 import Cardano.Address.Derivation (Depth(AccountK), XPrv)
 import Cardano.Address.Style.Shelley (getKey, Shelley)
-import Cardano.Api (TxInMode, CardanoMode, AddressAny, EraInMode, IsShelleyBasedEra, QueryInMode(QueryInEra, QueryCurrentEra), UTxO(unUTxO), QueryUTxOFilter(QueryUTxOByAddress), BlockInMode, ChainPoint, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), LocalNodeConnectInfo(LocalNodeConnectInfo), LocalNodeClientProtocols(LocalNodeClientProtocols, localChainSyncClient, localStateQueryClient, localTxSubmissionClient, localTxMonitoringClient), toEraInMode, ConsensusMode(CardanoMode), QueryInEra(QueryInShelleyBasedEra), QueryInShelleyBasedEra(QueryUTxO, QueryStakeAddresses), LocalStateQueryClient(LocalStateQueryClient), ConsensusModeIsMultiEra(CardanoModeIsMultiEra), cardanoEraStyle, connectToLocalNode, LocalChainSyncClient(NoLocalChainSyncClient), SigningKey(PaymentExtendedSigningKey), getVerificationKey, Lovelace, serialiseAddress,  ShelleyWitnessSigningKey(WitnessPaymentExtendedKey), File(File), AddressAny(AddressShelley))
+import Cardano.Api (TxInMode, AddressAny, QueryInMode(..), UTxO(unUTxO), QueryUTxOFilter(QueryUTxOByAddress), BlockInMode, ChainPoint, AnyCardanoEra(AnyCardanoEra), LocalNodeConnectInfo(LocalNodeConnectInfo), LocalNodeClientProtocols(LocalNodeClientProtocols, localChainSyncClient, localStateQueryClient, localTxSubmissionClient, localTxMonitoringClient), QueryInEra(QueryInShelleyBasedEra), QueryInShelleyBasedEra(QueryUTxO, QueryStakeAddresses), LocalStateQueryClient(LocalStateQueryClient), connectToLocalNode, LocalChainSyncClient(NoLocalChainSyncClient), SigningKey(PaymentExtendedSigningKey), getVerificationKey, serialiseAddress,  ShelleyWitnessSigningKey(WitnessPaymentExtendedKey), File(File), AddressAny(AddressShelley), ShelleyBasedEra)
 import Cardano.Api.Byron ()
---import Cardano.CLI.Run.Friendly (friendlyTxBS)
-import Cardano.Api.Shelley (makeStakeAddress, StakeCredential(StakeCredentialByKey), verificationKeyHash, castVerificationKey, SigningKey(StakeExtendedSigningKey), StakeAddress, PoolId, NetworkId, StakeExtendedKey, queryExpr, LocalStateQueryExpr, determineEraExpr, CardanoEra, CardanoEra(ConwayEra, ShelleyEra, AllegraEra, AlonzoEra, MaryEra, BabbageEra, ByronEra), shelleyBasedEra, IsCardanoEra, LocalTxMonitorClient(..), SlotNo, UnsupportedNtcVersionError)
-import Cardano.CLI.Legacy.Run.Address (buildShelleyAddress)
+import qualified Cardano.Api.Ledger as L
+
+import Cardano.Api.Shelley (makeStakeAddress, StakeCredential(StakeCredentialByKey), verificationKeyHash, castVerificationKey, SigningKey(StakeExtendedSigningKey), StakeAddress, PoolId, NetworkId, StakeExtendedKey, LocalTxMonitorClient(..), SlotNo)
+import Cardano.CLI.EraBased.Run.Address (buildShelleyAddress)
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types (FaucetState(..), FaucetConfigFile(..), FaucetValue, FaucetError(..), StakeKeyIntermediateState(..), StakeKeyState(..), accountKeyToStakeKey, parseConfig, mnemonicToRootKey, rootKeytoAcctKey, renderFaucetError, accountKeyToPaymentKey)
 import Cardano.Faucet.Utils
@@ -40,7 +41,7 @@ import Formatting.ShortFormatters hiding (x, b, f, l)
 import Network.Wai.Handler.Warp
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch)
 import Ouroboros.Network.Protocol.LocalStateQuery.Client qualified as Net.Query
-import Ouroboros.Network.Protocol.LocalStateQuery.Type ()
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (..))
 import Ouroboros.Network.Protocol.LocalTxMonitor.Client qualified as CTxMon
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client qualified as Net.Tx
 import Paths_cardano_faucet (getDataFileName)
@@ -53,15 +54,15 @@ import System.IO (hSetBuffering, BufferMode(LineBuffering))
 writeTMVar :: TMVar a -> a -> STM ()
 writeTMVar tmvar new = tryTakeTMVar tmvar >> putTMVar tmvar new
 
-app :: IsShelleyBasedEra era =>
-  CardanoEra era
+app :: ()
+  => ShelleyBasedEra era
   -> FaucetState era
   -> Text
   -> Application
 app era faucetState indexHtml = serve userAPI $ server era faucetState indexHtml
 
-startApiServer :: IsShelleyBasedEra era =>
-  CardanoEra era
+startApiServer :: ()
+  => ShelleyBasedEra era
   -> FaucetState era
   -> Port
   -> IO ()
@@ -118,18 +119,16 @@ unmaybe :: Maybe Prelude.String -> ExceptT FaucetError IO Prelude.String
 unmaybe (Just path) = pure path
 unmaybe Nothing = left FaucetErrorConfigFileNotSet
 
-getUtxoQuery :: forall era2 mode . IsShelleyBasedEra era2 => AddressAny -> Maybe (EraInMode era2 mode) ->  QueryInMode mode (Either EraMismatch (UTxO era2))
-getUtxoQuery _address Nothing = Prelude.error "not handled"
-getUtxoQuery address (Just eInMode) = QueryInEra eInMode query
+getUtxoQuery :: ShelleyBasedEra era -> AddressAny -> QueryInMode (Either EraMismatch (UTxO era))
+getUtxoQuery sbe address = QueryInEra query
   where
-    sbe = shelleyBasedEra @era2
     qfilter :: QueryUTxOFilter
     qfilter = QueryUTxOByAddress $ Set.singleton address
     query   = QueryInShelleyBasedEra sbe (QueryUTxO qfilter)
 
 aquireConnection :: Applicative f => m (Net.Query.ClientStAcquired block point query m a) -> f (Net.Query.ClientStIdle block point query m a)
 aquireConnection aquireComplete = do
-  pure $ Net.Query.SendMsgAcquire Nothing $ Net.Query.ClientStAcquiring
+  pure $ Net.Query.SendMsgAcquire VolatileTip $ Net.Query.ClientStAcquiring
     { Net.Query.recvMsgAcquired = aquireComplete
     , Net.Query.recvMsgFailure = Prelude.error "not implemented"
     }
@@ -144,12 +143,12 @@ runQueryThen query queryDone = do
 
 reAcquireThen :: m (Net.Query.ClientStAcquired block point query m a) -> IO (Net.Query.ClientStAcquired block point query m a)
 reAcquireThen cb = do
-  pure $ Net.Query.SendMsgReAcquire Nothing $ Net.Query.ClientStAcquiring
+  pure $ Net.Query.SendMsgReAcquire VolatileTip $ Net.Query.ClientStAcquiring
     { Net.Query.recvMsgAcquired = cb
     , Net.Query.recvMsgFailure = Prelude.error "not implemented"
     }
 
-sortStakeKeys :: (Map StakeAddress Lovelace, Map StakeAddress PoolId) -> Map StakeAddress (Word32, SigningKey StakeExtendedKey, StakeCredential) -> ([Word32],[(Word32, SigningKey StakeExtendedKey, StakeCredential)],[(Word32, Lovelace, PoolId)])
+sortStakeKeys :: (Map StakeAddress L.Coin, Map StakeAddress PoolId) -> Map StakeAddress (Word32, SigningKey StakeExtendedKey, StakeCredential) -> ([Word32],[(Word32, SigningKey StakeExtendedKey, StakeCredential)],[(Word32, L.Coin, PoolId)])
 sortStakeKeys (registeredStakeKeys, delegatedStakeKeys) manyStakeKeys = do
   let
     intermediateMerge :: Map StakeAddress StakeKeyIntermediateState
@@ -175,7 +174,7 @@ sortStakeKeys (registeredStakeKeys, delegatedStakeKeys) manyStakeKeys = do
     notDelegated :: [(Word32, SigningKey StakeExtendedKey, StakeCredential)]
     notDelegated = mapMaybe filterOnlyRegistered finalMergeValues
 
-    delegated :: [(Word32, Lovelace, PoolId)]
+    delegated :: [(Word32, L.Coin, PoolId)]
     delegated = mapMaybe filterOnlyDelegated finalMergeValues
   (notRegistered,notDelegated,delegated)
   where
@@ -198,14 +197,14 @@ sortStakeKeys (registeredStakeKeys, delegatedStakeKeys) manyStakeKeys = do
     filterOnlyRegistered :: StakeKeyState -> Maybe (Word32, SigningKey StakeExtendedKey, StakeCredential)
     filterOnlyRegistered (StakeKeyRegistered index skey vkey _rewards) = Just (index, skey, vkey)
     filterOnlyRegistered _ = Nothing
-    filterOnlyDelegated :: StakeKeyState -> Maybe (Word32, Lovelace, PoolId)
+    filterOnlyDelegated :: StakeKeyState -> Maybe (Word32, L.Coin, PoolId)
     filterOnlyDelegated (StakeKeyDelegated index reward poolid) = Just (index, reward, poolid)
     filterOnlyDelegated _ = Nothing
 
-submissionClient :: Bool -> TQueue (TxInMode CardanoMode, ByteString) -> Net.Tx.LocalTxSubmissionClient (TxInMode CardanoMode) reject IO a2
+submissionClient :: Bool -> TQueue (TxInMode, ByteString) -> Net.Tx.LocalTxSubmissionClient TxInMode reject IO a2
 submissionClient dryRun txQueue = Net.Tx.LocalTxSubmissionClient waitForTxAndLoop
   where
-    waitForTxAndLoop :: IO (Net.Tx.LocalTxClientStIdle (TxInMode CardanoMode) reject IO a)
+    waitForTxAndLoop :: IO (Net.Tx.LocalTxClientStIdle TxInMode reject IO a)
     waitForTxAndLoop = do
       (tx, prettyTx) <- atomically $ readTQueue txQueue
       case dryRun of
@@ -217,23 +216,10 @@ submissionClient dryRun txQueue = Net.Tx.LocalTxSubmissionClient waitForTxAndLoo
           --print result
           waitForTxAndLoop
 
-withEra :: Either UnsupportedNtcVersionError AnyCardanoEra -> (forall era. IsShelleyBasedEra era => CardanoEra era -> a) -> a
-withEra (Right (AnyCardanoEra ByronEra)) _ = Prelude.error "byron not supported"
-withEra (Right (AnyCardanoEra AllegraEra)) action = action AllegraEra
-withEra (Right (AnyCardanoEra AlonzoEra)) action = action AlonzoEra
-withEra (Right (AnyCardanoEra BabbageEra)) action = action BabbageEra
-withEra (Right (AnyCardanoEra MaryEra)) action = action MaryEra
-withEra (Right (AnyCardanoEra ShelleyEra)) action = action ShelleyEra
-withEra (Right (AnyCardanoEra ConwayEra)) action = action ConwayEra
-withEra (Left _) _ = Prelude.error "withEra ntc error"
+queryManyStakeAddr :: ShelleyBasedEra era -> NetworkId -> [StakeCredential] -> QueryInMode (Either EraMismatch (Map StakeAddress L.Coin, Map StakeAddress PoolId))
+queryManyStakeAddr sbe network creds = QueryInEra (QueryInShelleyBasedEra sbe (QueryStakeAddresses (Set.fromList creds) network))
 
-queryManyStakeAddr :: forall era mode . IsShelleyBasedEra era => NetworkId -> Maybe (EraInMode era mode) -> [StakeCredential] -> QueryInMode mode (Either EraMismatch (Map StakeAddress Lovelace, Map StakeAddress PoolId))
-queryManyStakeAddr _ Nothing _ = Prelude.error "not handled"
-queryManyStakeAddr network (Just eInMode) creds = QueryInEra eInMode (QueryInShelleyBasedEra sbe (QueryStakeAddresses (Set.fromList creds) network))
-  where
-    sbe = shelleyBasedEra @era
-
-newFaucetState :: IsCardanoEra era => FaucetConfigFile -> TQueue (TxInMode CardanoMode, ByteString) -> ExceptT FaucetError IO (FaucetState era)
+newFaucetState :: FaucetConfigFile -> TQueue (TxInMode, ByteString) -> ExceptT FaucetError IO (FaucetState era)
 newFaucetState fsConfig fsTxQueue = do
   (fsUtxoTMVar,fsStakeTMVar,fsSendMoneyRateLimitState,fsDelegationRateLimitState) <- liftIO $ (,,,) <$> newEmptyTMVarIO <*> newEmptyTMVarIO <*> newTMVarIO mempty <*> newTMVarIO mempty
   fsRootKey <- mnemonicToRootKey $ fcfMnemonic fsConfig
@@ -246,53 +232,8 @@ newFaucetState fsConfig fsTxQueue = do
     fsPaymentVkey = pay_vkey
     fsBucketSizes = findAllSizes fsConfig
     fsNetwork = fcfNetwork fsConfig
-  fsOwnAddress <- withExceptT FaucetErrorShelleyAddr $ AddressShelley <$> buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork
+  fsOwnAddress <- withExceptT FaucetErrorAddr $ AddressShelley <$> buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork
   pure $ FaucetState{..}
-
-_newQueryClient :: Port -> FaucetConfigFile -> TQueue (TxInMode CardanoMode, ByteString) -> LocalStateQueryExpr block point (QueryInMode CardanoMode) r IO ()
-_newQueryClient port config txQueue = do
-  rawEra <- determineEraExpr defaultCModeParams
-  withEra rawEra $ \era -> do
-    eFaucetState <- liftIO $ runExceptT $ newFaucetState config txQueue
-    let
-      faucetState = fromRight (Prelude.error "cant create state") eFaucetState
-    putStrLn $ "faucet address: " <> serialiseAddress (fsOwnAddress faucetState)
-    _child <- liftIO $ forkIO $ startApiServer era faucetState port
-    eUtxoResult <- queryExpr $ getUtxoQuery (fsOwnAddress faucetState) $ toEraInMode era CardanoMode
-    case eUtxoResult of
-      Right (Right result) -> do
-        let stats = computeUtxoStats (unUTxO result)
-        print stats
-        liftIO $ atomically $ putTMVar (fsUtxoTMVar faucetState) (unUTxO result)
-        putStrLn @Text "utxo set initialized"
-      Right (Left err) -> print err
-      Left err -> print err
-    case fcfMaxStakeKeyIndex config of
-      Just count -> do
-        let
-          manyStakeKeys :: Map StakeAddress (Word32, SigningKey StakeExtendedKey, StakeCredential)
-          manyStakeKeys = createManyStakeKeys (fsAcctKey faucetState) (fcfNetwork config) count
-          x :: [StakeCredential]
-          x = Map.elems $ map (\(_,_,v) -> v) manyStakeKeys
-        eResult <- queryExpr (queryManyStakeAddr (fcfNetwork config) (toEraInMode era CardanoMode) x)
-        print eResult
-        case eResult of
-          Right (Right result) -> do
-            let
-              (notRegistered, notDelegated, delegated) = sortStakeKeys result manyStakeKeys
-            case fcfDebug config of
-              True -> do
-                putStrLn $ format ("these stake key indexes are not registered: " % sh) notRegistered
-                putStrLn $ format ("these stake keys are registered and ready for use: " % sh) $ sort $ map (\(index,_skey,_vkey) -> index) notDelegated
-                putStrLn $ format ("these stake keys are delegated: " % sh) $ sort delegated
-              False -> do
-                putStrLn $ format (d % " stake keys not registered, " % d % " stake keys registered and ready for use, "%d%" stake keys delegated to pools") (length notRegistered) (length notDelegated) (length delegated)
-            liftIO $ atomically $ putTMVar (fsStakeTMVar faucetState) (notDelegated, delegated)
-          Right (Left err) -> print err
-          Left err -> print err
-      Nothing -> pure ()
-    pure ()
-  pure ()
 
 finish :: IO (Net.Query.ClientStAcquired block point query IO ())
 finish = do
@@ -300,12 +241,12 @@ finish = do
   pure $ Net.Query.SendMsgRelease $
     pure $ Net.Query.SendMsgDone ()
 
-queryStakeKeyLoop :: IsShelleyBasedEra era => NetworkId -> Maybe (EraInMode era mode) -> Map StakeAddress (Word32, SigningKey StakeExtendedKey, StakeCredential) -> Bool -> FaucetState era -> Bool -> IO (Net.Query.ClientStAcquired block point (QueryInMode mode) IO ())
-queryStakeKeyLoop network era manyStakeKeys debug faucetState initial = do
+queryStakeKeyLoop :: ShelleyBasedEra era -> NetworkId -> Map StakeAddress (Word32, SigningKey StakeExtendedKey, StakeCredential) -> Bool -> FaucetState era -> Bool -> IO (Net.Query.ClientStAcquired block point QueryInMode IO ())
+queryStakeKeyLoop era network manyStakeKeys debug faucetState initial = do
   let
     stakeCredentials :: [StakeCredential]
     stakeCredentials = Map.elems $ map (\(_,_,v) -> v) manyStakeKeys
-  runQueryThen (queryManyStakeAddr network era stakeCredentials) $ \case
+  runQueryThen (queryManyStakeAddr era network stakeCredentials) $ \case
     Right stakeKeyResults -> do
       let (notRegistered,notDelegated,delegated) = sortStakeKeys stakeKeyResults manyStakeKeys
       case debug of
@@ -318,27 +259,28 @@ queryStakeKeyLoop network era manyStakeKeys debug faucetState initial = do
       atomically $ writeTMVar (fsStakeTMVar faucetState) (notDelegated, delegated)
       threadDelay 60000000
       reAcquireThen $ do
-        queryStakeKeyLoop network era manyStakeKeys debug faucetState False
-    Left _ -> Prelude.error "not handled"
+        queryStakeKeyLoop era network manyStakeKeys debug faucetState False
+    Left e -> Prelude.error $ show e
 
-queryClient :: FaucetConfigFile -> TQueue (TxInMode CardanoMode, ByteString) -> Port -> Net.Query.LocalStateQueryClient (BlockInMode CardanoMode) ChainPoint (QueryInMode CardanoMode) IO ()
+queryClient :: FaucetConfigFile -> TQueue (TxInMode, ByteString) -> Port -> Net.Query.LocalStateQueryClient BlockInMode ChainPoint QueryInMode IO ()
 queryClient config txQueue port = LocalStateQueryClient $ do
   aquireConnection $ do
-    runQueryThen (QueryCurrentEra CardanoModeIsMultiEra) $ \(AnyCardanoEra era3) -> do
-      eFaucetState <- liftIO $ runExceptT $ newFaucetState config txQueue
-      let
-        faucetState = fromRight (Prelude.error "cant create state") eFaucetState
-      putStrLn $ format ("lovelace values for api keys " % sh) $ fsBucketSizes faucetState
-      putStrLn $ "faucet address: " <> serialiseAddress (fsOwnAddress faucetState)
-      case cardanoEraStyle era3 of
-        ShelleyBasedEra _ -> do
-          _child <- forkIO $ startApiServer era3 faucetState port
-          runQueryThen (getUtxoQuery (fsOwnAddress faucetState) (toEraInMode era3 CardanoMode)) $ \case
+    runQueryThen (QueryCurrentEra) $ \(AnyCardanoEra era) -> do
+      case cardanoEraToShelleyBasedEra era of
+        Left err -> Prelude.error $ Text.unpack err
+        Right sbe -> do
+          eFaucetState <- liftIO $ runExceptT $ newFaucetState config txQueue
+          let
+            faucetState = fromRight (Prelude.error "cant create state") eFaucetState
+          putStrLn $ format ("lovelace values for api keys " % sh) $ fsBucketSizes faucetState
+          putStrLn $ "faucet address: " <> serialiseAddress (fsOwnAddress faucetState)
+          _child <- forkIO $ startApiServer sbe faucetState port
+          runQueryThen (getUtxoQuery sbe (fsOwnAddress faucetState)) $ \case
             Right result -> do
               let
-                --reduceTxo :: TxOut ctx era -> (Lovelace, TxOut ctx era)
+                --reduceTxo :: TxOut ctx era -> (L.Coin, TxOut ctx era)
                 --reduceTxo out@(TxOut _ value _ _) = (getValue value, out)
-                --reducedUtxo :: Map TxIn (Lovelace, TxOut CtxUTxO era)
+                --reducedUtxo :: Map TxIn (L.Coin, TxOut CtxUTxO era)
                 --reducedUtxo = Map.map reduceTxo $ unUTxO result
               --atomically $ putTMVar utxoTMVar $ unUTxO result
               let stats = computeUtxoStats (unUTxO result)
@@ -352,19 +294,18 @@ queryClient config txQueue port = LocalStateQueryClient $ do
                   let
                     manyStakeKeys :: Map StakeAddress (Word32, SigningKey StakeExtendedKey, StakeCredential)
                     manyStakeKeys = createManyStakeKeys (fsAcctKey faucetState) (fcfNetwork config) count
-                  queryStakeKeyLoop (fcfNetwork config) (toEraInMode era3 CardanoMode) manyStakeKeys (fcfDebug config) faucetState True
-            Left _e -> Prelude.error "not handled"
-        _ -> Prelude.error "not handled"
+                  queryStakeKeyLoop sbe (fcfNetwork config) manyStakeKeys (fcfDebug config) faucetState True
+            Left e -> Prelude.error $ show e
 
-txMonitor :: FaucetConfigFile -> LocalTxMonitorClient txid (TxInMode CardanoMode) SlotNo IO a
+txMonitor :: FaucetConfigFile -> LocalTxMonitorClient txid TxInMode SlotNo IO a
 txMonitor FaucetConfigFile{fcfDebug} = LocalTxMonitorClient $ return $ CTxMon.SendMsgAcquire getSnapshot
   where
-    getSnapshot :: SlotNo -> IO (CTxMon.ClientStAcquired txid1 (TxInMode CardanoMode) SlotNo IO a1)
+    getSnapshot :: SlotNo -> IO (CTxMon.ClientStAcquired txid1 TxInMode SlotNo IO a1)
     getSnapshot _slot = do
       --when fcfDebug $ do
         --putStrLn $ format ("got mempool snapshot at slot " % sh) $ slot
       return $ CTxMon.SendMsgNextTx getNextTx
-    getNextTx :: Show tx => Maybe tx -> IO (CTxMon.ClientStAcquired txid1 (TxInMode CardanoMode) SlotNo IO a1)
+    getNextTx :: Show tx => Maybe tx -> IO (CTxMon.ClientStAcquired txid1 TxInMode SlotNo IO a1)
     getNextTx (Just tx) = do
       when fcfDebug $ do
         putStrLn $ format ("found tx in snapshot: " % sh) $ tx
@@ -398,7 +339,7 @@ main = do
     fsConfig <- parseConfig bar
     Right sockPath <- liftIO $ readEnvSocketPath
     let
-      localNodeConnInfo :: LocalNodeConnectInfo CardanoMode
+      localNodeConnInfo :: LocalNodeConnectInfo
       localNodeConnInfo = LocalNodeConnectInfo defaultCModeParams (fcfNetwork fsConfig) (File sockPath)
 
     liftIO $ connectToLocalNode

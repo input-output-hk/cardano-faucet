@@ -12,18 +12,19 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE NumericUnderscores #-}
 
 module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest(..)) where
 
-import Cardano.Api (CardanoEra, IsShelleyBasedEra, TxInMode(TxInMode), Lovelace(Lovelace), IsCardanoEra, TxCertificates(TxCertificatesNone), serialiseAddress, SigningKey(PaymentExtendedSigningKey), PaymentExtendedKey, makeStakeAddressPoolDelegationCertificate)
-import Cardano.Api.Shelley (StakeCredential, PoolId, TxCertificates(TxCertificates), certificatesSupportedInEra, BuildTxWith(BuildTxWith), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForStakeAddr), StakeExtendedKey, serialiseToBech32, AssetId(AssetId, AdaAssetId), PolicyId(PolicyId), serialiseToRawBytesHexText, AssetName(AssetName), TxMintValue(TxMintNone, TxMintValue), AddressAny, multiAssetSupportedInEra, valueFromList, ScriptWitness(SimpleScriptWitness), SimpleScript(RequireSignature), SimpleScriptOrReferenceInput(SScript), scriptLanguageSupportedInEra, ScriptLanguage(SimpleScriptLanguage), shelleyBasedEra, Tx, TxId, verificationKeyHash, getVerificationKey, castVerificationKey, VerificationKey, Quantity(Quantity), scriptPolicyId, TxOut(TxOut), TxOutValue(TxOutAdaOnly, TxOutValue), lovelaceToValue, negateValue, Value, BuildTx, CtxUTxO, WitCtxMint, Script(SimpleScript), SimpleScript, SimpleScript', ShelleyWitnessSigningKey(WitnessPaymentExtendedKey, WitnessStakeExtendedKey))
-import Cardano.Faucet.Misc (convertEra, parseAddress, toFaucetValue, faucetValueToLovelace, stripMintingTokens)
+import Cardano.Api
+import qualified Cardano.Api.Ledger as L
+import Cardano.Api.Shelley (PoolId, SimpleScriptOrReferenceInput(SScript), Hash (unStakePoolKeyHash))
+import Cardano.Faucet.Misc (faucetValueToLovelace, parseAddress, stripMintingTokens, toFaucetValue)
 import Cardano.Faucet.TxUtils (makeAndSignTx, Fee(..))
 import Cardano.Faucet.Types (CaptchaToken, ForwardedFor(..), SendMoneyReply(..), DelegationReply(..), SiteVerifyReply(..), SiteVerifyRequest(..), SecretKey, FaucetState(..), ApiKeyValue(..), RateLimitResult(..), ApiKey(..), RateLimitAddress(..), UtxoStats(..), FaucetValue(..), FaucetConfigFile(..), FaucetWebError(..), SiteKey(..), SendMoneySent(..), FaucetToken(FaucetToken, FaucetMintToken), rootKeyToPolicyKey)
-import Cardano.Faucet.Utils (findUtxoOfSize, computeUtxoStats)
+import Cardano.Faucet.Utils (findUtxoOfSize, computeUtxoStats, prettyFriendlyTx)
 import Cardano.Prelude hiding ((%))
 import Control.Concurrent.STM (writeTQueue, TMVar, takeTMVar, putTMVar, readTMVar)
-import Control.Monad.Trans.Except.Extra (left)
 import Data.Aeson (eitherDecode)
 import Data.ByteString.Lazy qualified as LBS
 import Data.IP (IPv4, fromHostAddress)
@@ -42,7 +43,6 @@ import Servant
 import Servant.Client (ClientM, ClientError, client, runClientM, mkClientEnv, BaseUrl(BaseUrl), Scheme(Https))
 import Cardano.Address.Style.Shelley (Shelley, getKey)
 import Cardano.Address.Derivation (Depth(PolicyK), XPrv)
-import Cardano.CLI.Json.Friendly (friendlyTxBS)
 import Cardano.CLI.Types.Common
 
 -- create recaptcha api keys at https://www.google.com/recaptcha/admin
@@ -89,12 +89,20 @@ doSiteVerify secret token = do
   manager' <- newTlsManagerWith tlsManagerSettings
   runClientM (siteVerify $ SiteVerifyRequest secret token Nothing) (mkClientEnv manager' (BaseUrl Https "www.google.com" 443 ""))
 
-server :: IsShelleyBasedEra era =>
-  CardanoEra era
+server :: ()
+  => ShelleyBasedEra era
   -> FaucetState era
   -> Text
   -> Server RootDir
-server era faucetState indexHtml = handleSendMoney era faucetState :<|> handleSendMoney era faucetState :<|> handleMetrics faucetState :<|> handleDelegateStake era faucetState :<|> handleDelegateStake era faucetState :<|> handleStaticFile site_key_reply :<|> (handleStaticFile indexHtml) :<|> handleMintCoins era faucetState
+server era faucetState indexHtml =
+  (handleSendMoney era faucetState)
+    :<|> (handleSendMoney era faucetState)
+    :<|> (handleMetrics faucetState)
+    :<|> (handleDelegateStake era faucetState)
+    :<|> (handleDelegateStake era faucetState)
+    :<|> (handleStaticFile site_key_reply)
+    :<|> (handleStaticFile indexHtml)
+    :<|> (handleMintCoins era faucetState)
   where
     site_key_reply = sformat ("site_key = \"" % st % "\";") $ unSiteKey $ fcfRecaptchaSiteKey $ fsConfig faucetState
 
@@ -103,7 +111,7 @@ handleStaticFile = pure
 
 -- takes a TMVar of used and unused stake kets
 -- atomically pops one off the unused list, adds it to the used list, and returns the popped key
-getKeyToDelegate :: TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, Lovelace, PoolId)]) -> PoolId -> STM (SigningKey StakeExtendedKey, StakeCredential)
+getKeyToDelegate :: TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, L.Coin, PoolId)]) -> PoolId -> STM (SigningKey StakeExtendedKey, StakeCredential)
 getKeyToDelegate tmvar poolid = do
   (availableKeys, usedKeys) <- takeTMVar tmvar
   case (poolid `elem` map (\(_,_,p) -> p) usedKeys, availableKeys) of
@@ -123,15 +131,14 @@ getCorsReply whitelist mOrigin = case mOrigin of
     True -> addHeader origin
     False -> noHeader
 
-handleMintCoins :: IsShelleyBasedEra era => CardanoEra era -> FaucetState era -> Text -> Integer -> Integer -> Integer -> Servant.Handler (Either FaucetWebError ())
+handleMintCoins :: ShelleyBasedEra era -> FaucetState era -> Text -> Integer -> Integer -> Integer -> Servant.Handler (Either FaucetWebError ())
 handleMintCoins era fs@FaucetState{fsTxQueue} addr fee output_count tokens_per_utxo = do
   eResult <- liftIO $ runExceptT $ do
     addressAny <- parseAddress addr
     print addressAny
-    (signedTx, _txid) <- mintFreshTokens era fs 0 addressAny (AssetName "Testtoken") tokens_per_utxo output_count (Fee $ Lovelace fee)
-    let prettyTx = friendlyTxBS era signedTx
-    eraInMode <- convertEra era
-    liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode signedTx eraInMode, prettyTx)
+    (signedTx, _txid) <- mintFreshTokens era fs 0 addressAny (AssetName "Testtoken") tokens_per_utxo output_count (Fee $ L.Coin fee)
+    let prettyTx = prettyFriendlyTx era signedTx
+    liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode era signedTx, prettyTx)
     pure ()
   pure eResult
 
@@ -174,11 +181,7 @@ test = do
     Right res -> print res-}
 
 txoutToValue :: TxOut CtxUTxO era -> Value
-txoutToValue (TxOut _ txOutValue _ _) = unwrap txOutValue
-  where
-    unwrap :: TxOutValue era -> Value
-    unwrap (TxOutAdaOnly _ ll) = lovelaceToValue ll
-    unwrap (TxOutValue _ v) = v
+txoutToValue (TxOut _ txOutValue _ _) = txOutValueToValue txOutValue
 
 data TokenState = TokenState
   { tsAssetId :: AssetId
@@ -188,7 +191,7 @@ data TokenState = TokenState
   , tsScript :: Script SimpleScript'
   }
 
-getTokenState :: HasCallStack => IsCardanoEra era => Word32 -> AssetName -> FaucetState era -> TokenState
+getTokenState :: HasCallStack => Word32 -> AssetName -> FaucetState era -> TokenState
 getTokenState policy_index name FaucetState{fsRootKey} = TokenState{tsAssetId,tsPolicyId,tsSimpleScript,tsPolicySKey,tsScript}
   where
     policyKey :: Shelley 'PolicyK XPrv
@@ -204,23 +207,27 @@ getTokenState policy_index name FaucetState{fsRootKey} = TokenState{tsAssetId,ts
     tsPolicyId = scriptPolicyId tsScript
     tsAssetId = AssetId tsPolicyId name
 
-getOptionalMintOutput :: IsCardanoEra era => FaucetState era -> CardanoEra era -> FaucetValue -> ExceptT FaucetWebError IO (Value, TxMintValue BuildTx era, [ShelleyWitnessSigningKey])
-getOptionalMintOutput fs era (FaucetValueMultiAsset _ (FaucetMintToken (policy_index, name, quant))) = do
-  supported <- either (\_ -> left $ FaucetWebErrorTodo "asset error") pure $ multiAssetSupportedInEra era
-  let
-  languageSupportedInEra <- case (scriptLanguageSupportedInEra era $ SimpleScriptLanguage) of
-    Just yes -> pure yes
-    Nothing -> left $ FaucetWebErrorTodo "scripts not supported"
-  let
-    TokenState{tsAssetId,tsPolicyId,tsSimpleScript,tsPolicySKey} = getTokenState policy_index name fs
-    valueToMint = valueFromList [ (tsAssetId, quant) ]
-    witnessesProvidedMap = Map.fromList [(tsPolicyId, SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript))]
-    y = BuildTxWith $ witnessesProvidedMap
-  pure $ (valueToMint, TxMintValue supported valueToMint y, [WitnessPaymentExtendedKey tsPolicySKey])
+getOptionalMintOutput :: ShelleyBasedEra era -> FaucetState era -> FaucetValue -> ExceptT FaucetWebError IO (Value, TxMintValue BuildTx era, [ShelleyWitnessSigningKey])
+getOptionalMintOutput sbe fs (FaucetValueMultiAsset _ (FaucetMintToken (policy_index, name, quant))) = do
+  caseShelleyToAllegraOrMaryEraOnwards
+    (\_ -> left $ FaucetWebErrorTodo "era earlier than mary not supported")
+    (\maryOnwards -> do
+      let
+      languageSupportedInEra <- case (scriptLanguageSupportedInEra sbe $ SimpleScriptLanguage) of
+        Just yes -> pure yes
+        Nothing -> left $ FaucetWebErrorTodo "scripts not supported"
+      let
+        TokenState{tsAssetId,tsPolicyId,tsSimpleScript,tsPolicySKey} = getTokenState policy_index name fs
+        valueToMint = valueFromList [ (tsAssetId, quant) ]
+        witnessesProvidedMap = Map.fromList [(tsPolicyId, SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript))]
+        y = BuildTxWith $ witnessesProvidedMap
+      pure $ (valueToMint, TxMintValue maryOnwards valueToMint y, [WitnessPaymentExtendedKey tsPolicySKey])
+    )
+    sbe
 getOptionalMintOutput _ _ _ = pure (mempty, TxMintNone, [])
 
-mintFreshTokens :: forall era . IsShelleyBasedEra era
-  => CardanoEra era
+mintFreshTokens :: ()
+  => ShelleyBasedEra era
   -> FaucetState era
   -> Word32
   -> AddressAny
@@ -229,45 +236,46 @@ mintFreshTokens :: forall era . IsShelleyBasedEra era
   -> Integer
   -> Fee
   -> ExceptT FaucetWebError IO (Tx era, TxId)
-mintFreshTokens era fs@FaucetState{fsUtxoTMVar,fsPaymentSkey,fsOwnAddress} policyIndex destinationAddress tokenname count tx_out_count (Fee feeLovelace) = do
+mintFreshTokens sbe fs@FaucetState{fsUtxoTMVar,fsPaymentSkey,fsOwnAddress} policyIndex destinationAddress tokenname count tx_out_count (Fee feeLovelace) = do
   let
     TokenState{tsAssetId,tsPolicyId,tsSimpleScript,tsPolicySKey} = getTokenState policyIndex tokenname fs
-    sbe = shelleyBasedEra @era
   txinout@(_, txout) <- liftIO $ atomically $ do
-    txinout <- findUtxoOfSize fsUtxoTMVar $ Ada $ Lovelace (1000 * 1000000)
+    txinout <- findUtxoOfSize fsUtxoTMVar $ Ada $ L.Coin (1000 * 1_000_000)
     pure txinout
-  supported <- either (\_ -> left $ FaucetWebErrorTodo "asset error") pure $ multiAssetSupportedInEra era
-  languageSupportedInEra <- case (scriptLanguageSupportedInEra era $ SimpleScriptLanguage) of
-    Just yes -> pure yes
-    Nothing -> left $ FaucetWebErrorTodo "scripts not supported"
-  let
-    valueToMint = valueFromList [(tsAssetId, Quantity $ count * tx_out_count)]
-    witnessesProvidedMap :: Map PolicyId (ScriptWitness WitCtxMint era)
-    witnessesProvidedMap = Map.fromList [(tsPolicyId, SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript))]
-    mint = TxMintValue supported valueToMint $ BuildTxWith witnessesProvidedMap
-    -- value in each utxo being created
-    outputValue = valueFromList [ (AdaAssetId, Quantity 10000000), (tsAssetId, Quantity count) ]
-    outputValues = replicate (fromIntegral tx_out_count) outputValue
-    -- takes an addr and a value, and creates a txout
-    to_txout :: AddressAny -> Value -> TxOutAnyEra
-    to_txout addr v = TxOutAnyEra addr v TxOutDatumByNone ReferenceScriptAnyEraNone
-    feeValue = lovelaceToValue feeLovelace
-    -- the desired txout's
-    outputs = map (to_txout destinationAddress) outputValues
-    output_sum = negateValue $ mconcat $ feeValue:outputValues
-    input_sum = mconcat [ txoutToValue txout, valueToMint ]
-    change = input_sum <> output_sum
-    -- prepend the change if there is any
-    outputsWithChange = if (change == mempty) then outputs else (to_txout fsOwnAddress change):outputs
-  putStrLn $ format ("outputValue: " % sh) $ outputValue
-  putStrLn $ format ("output_sum: " % sh) $ output_sum
-  putStrLn $ format ("input_sum: " % sh) $ input_sum
-  putStrLn $ format ("change: " % sh) $ change
-  (signedTx, txid) <- makeAndSignTx sbe txinout (Right outputsWithChange) [fsPaymentSkey, WitnessPaymentExtendedKey tsPolicySKey] TxCertificatesNone mint (Fee feeLovelace)
-  pure (signedTx, txid)
+  caseShelleyToAllegraOrMaryEraOnwards
+    (\_ -> left $ FaucetWebErrorTodo "era earlier than mary not supported")
+    (\supported -> do
+      languageSupportedInEra <- case (scriptLanguageSupportedInEra sbe $ SimpleScriptLanguage) of
+        Just yes -> pure yes
+        Nothing -> left $ FaucetWebErrorTodo "scripts not supported"
+      let
+        valueToMint = valueFromList [(tsAssetId, Quantity $ count * tx_out_count)]
+        witnessesProvidedMap = Map.fromList [(tsPolicyId, SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript))]
+        mint = TxMintValue supported valueToMint $ BuildTxWith witnessesProvidedMap
+        -- value in each utxo being created
+        outputValue = valueFromList [ (AdaAssetId, Quantity 10000000), (tsAssetId, Quantity count) ]
+        outputValues = replicate (fromIntegral tx_out_count) outputValue
+        -- takes an addr and a value, and creates a txout
+        to_txout :: AddressAny -> Value -> TxOutAnyEra
+        to_txout addr v = TxOutAnyEra addr v TxOutDatumByNone ReferenceScriptAnyEraNone
+        feeValue = lovelaceToValue feeLovelace
+        -- the desired txout's
+        outputs = map (to_txout destinationAddress) outputValues
+        output_sum = negateValue $ mconcat $ feeValue:outputValues
+        input_sum = mconcat [ txoutToValue txout, valueToMint ]
+        change = input_sum <> output_sum
+        -- prepend the change if there is any
+        outputsWithChange = if (change == mempty) then outputs else (to_txout fsOwnAddress change):outputs
+      putStrLn $ format ("outputValue: " % sh) $ outputValue
+      putStrLn $ format ("output_sum: " % sh) $ output_sum
+      putStrLn $ format ("input_sum: " % sh) $ input_sum
+      putStrLn $ format ("change: " % sh) $ change
+      (signedTx, txid) <- makeAndSignTx sbe txinout (Right outputsWithChange) [fsPaymentSkey, WitnessPaymentExtendedKey tsPolicySKey] TxCertificatesNone mint (Fee feeLovelace)
+      pure (signedTx, txid))
+    sbe
 
-handleDelegateStake :: forall era. IsShelleyBasedEra era
-  => CardanoEra era
+handleDelegateStake :: ()
+  => ShelleyBasedEra era
   -> FaucetState era
   -> PoolId
   -> Maybe Text
@@ -276,10 +284,9 @@ handleDelegateStake :: forall era. IsShelleyBasedEra era
   -> Maybe ForwardedFor
   -> Maybe Text
   -> Servant.Handler (Headers '[Header "Access-Control-Allow-Origin" Text] DelegationReply)
-handleDelegateStake era FaucetState{fsPaymentSkey,fsUtxoTMVar,fsTxQueue,fsStakeTMVar,fsConfig,fsDelegationRateLimitState,fsOwnAddress} poolId mApiKey mToken remoteip mForwardedFor mOrigin = do
+handleDelegateStake sbe FaucetState{fsPaymentSkey,fsUtxoTMVar,fsTxQueue,fsStakeTMVar,fsConfig,fsDelegationRateLimitState,fsOwnAddress} poolId mApiKey mToken remoteip mForwardedFor mOrigin = do
   let
     clientIP = pickIp mForwardedFor remoteip
-    sbe = shelleyBasedEra @era
   eResult <- liftIO $ runExceptT $ do
     when (fcfMaxStakeKeyIndex fsConfig == Nothing) $ left $ FaucetWebErrorTodo "delegation disabled"
     mReply <- liftIO $ decideBetweenKeyAndCaptcha Nothing mApiKey mToken fsConfig
@@ -298,7 +305,7 @@ handleDelegateStake era FaucetState{fsPaymentSkey,fsUtxoTMVar,fsTxQueue,fsStakeT
               -- get an unused stake key
               stakeKey <- getKeyToDelegate fsStakeTMVar poolId
               -- and get a txout to fund the delegation tx
-              txinout <- findUtxoOfSize fsUtxoTMVar $ Ada $ Lovelace ((fcfDelegationUtxoSize fsConfig) * 1000000)
+              txinout <- findUtxoOfSize fsUtxoTMVar $ Ada $ L.Coin ((fcfDelegationUtxoSize fsConfig) * 1_000_000)
               pure $ Right (stakeKey, txinout)
             RateLimitResultDeny waitPeriod -> throwSTM $ FaucetWebErrorRateLimitExeeeded waitPeriod (serialiseToBech32 poolId)
       -- getKeyToDelegate and findUtxoOfSize can use throwSTM to report an error, and undo the entire atomic action
@@ -307,16 +314,20 @@ handleDelegateStake era FaucetState{fsPaymentSkey,fsUtxoTMVar,fsTxQueue,fsStakeT
       Left err -> left err
       Right ((stake_skey, creds), txinout) -> do
         let
-          cert = makeStakeAddressPoolDelegationCertificate sbe creds poolId
+          poolKeyHash :: L.KeyHash 'L.StakePool L.StandardCrypto = unStakePoolKeyHash poolId
+          requirements =
+            caseShelleyToBabbageOrConwayEraOnwards
+              (\shelleyToBabbage -> StakeDelegationRequirementsPreConway shelleyToBabbage creds poolId)
+              (\cOnwards -> StakeDelegationRequirementsConwayOnwards cOnwards creds (L.DelegStake poolKeyHash))
+              sbe
+          cert = makeStakeAddressDelegationCertificate requirements
           stake_witness = WitnessStakeExtendedKey stake_skey
           x = BuildTxWith $ Map.fromList [(creds,KeyWitness KeyWitnessForStakeAddr)]
-        supported <- maybe (left $ FaucetWebErrorTodo "cert error") pure $ certificatesSupportedInEra era
-        (signedTx, txid) <- makeAndSignTx sbe txinout (Left fsOwnAddress) [fsPaymentSkey, stake_witness] (TxCertificates supported [cert] x) TxMintNone (Fee $ Lovelace 200000)
+        (signedTx, txid) <- makeAndSignTx sbe txinout (Left fsOwnAddress) [fsPaymentSkey, stake_witness] (TxCertificates sbe [cert] x) TxMintNone (Fee $ L.Coin 200_000)
         let
-          prettyTx = friendlyTxBS era signedTx
-        eraInMode <- convertEra era
+          prettyTx = prettyFriendlyTx sbe signedTx
         putStrLn $ format ("delegating stake key to pool " % sh) (serialiseToBech32 poolId)
-        liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode signedTx eraInMode, prettyTx)
+        liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode sbe signedTx, prettyTx)
         pure $ DelegationReplySuccess txid
   let corsHeader = getCorsReply (fcfAllowedCorsOrigins fsConfig) mOrigin
   case eResult of
@@ -400,7 +411,7 @@ attributesToString map' = if (Map.null map') then "" else wrapped
 toMetric :: Metric -> Text
 toMetric (Metric attribs key val) = key <> (attributesToString attribs) <> " " <> valToString val
 
-handleMetrics :: IsCardanoEra era => FaucetState era -> Servant.Handler Text
+handleMetrics :: FaucetState era -> Servant.Handler Text
 handleMetrics FaucetState{fsUtxoTMVar,fsBucketSizes,fsConfig,fsStakeTMVar} = do
   liftIO $ do
     (utxo, (stakeUnused, stakeUsed)) <- atomically $ do
@@ -416,11 +427,11 @@ handleMetrics FaucetState{fsUtxoTMVar,fsBucketSizes,fsConfig,fsStakeTMVar} = do
       missingUtxo = Map.difference (Map.fromList $ map (\fv -> (fv,0)) fsBucketSizes) stats
       isRequiredSize :: FaucetValue -> Maybe (Text, MetricValue)
       isRequiredSize v = if (elem v fsBucketSizes) then Just ("is_valid",MetricValueInt 1) else Nothing
-      isForDelegation v = if (v == Lovelace ((fcfDelegationUtxoSize fsConfig) * 1000000)) then Just ("for_delegation",MetricValueInt 1) else Nothing
+      isForDelegation v = if (v == L.Coin ((fcfDelegationUtxoSize fsConfig) * 1_000_000)) then Just ("for_delegation",MetricValueInt 1) else Nothing
       valueAttribute :: FaucetValue -> [Maybe (Text, MetricValue)]
       valueAttribute fv = [Just ("lovelace", MetricValueInt l), Just ("ada",MetricValueFloat $ (fromIntegral l) / 1000000)]
         where
-          Lovelace l = faucetValueToLovelace fv
+          L.Coin l = faucetValueToLovelace fv
       tokenAttributes :: FaucetToken -> [Maybe (Text, MetricValue)]
       tokenAttributes (FaucetToken (AssetId (PolicyId scripthash) (AssetName _tokenname), _quant)) = [
           Just ("policyid", MetricValueStr $ serialiseToRawBytesHexText scripthash)
@@ -437,7 +448,7 @@ handleMetrics FaucetState{fsUtxoTMVar,fsBucketSizes,fsConfig,fsStakeTMVar} = do
       stakeUsedToMetric :: Metric
       stakeUsedToMetric = Metric mempty "faucet_delegation_pools" (MetricValueInt $ fromIntegral $ length stakeUsed)
       stakeRewardsMetric :: [Metric]
-      stakeRewardsMetric = map (\(index, Lovelace reward, pool) -> Metric (Map.fromList [("index", MetricValueInt $ fromIntegral index), ("pool", MetricValueStr $ serialiseToBech32 pool)]) "faucet_delegation_rewards" (MetricValueInt reward)) stakeUsed
+      stakeRewardsMetric = map (\(index, L.Coin reward, pool) -> Metric (Map.fromList [("index", MetricValueInt $ fromIntegral index), ("pool", MetricValueStr $ serialiseToBech32 pool)]) "faucet_delegation_rewards" (MetricValueInt reward)) stakeUsed
       utxoMetrics :: [Metric]
       utxoMetrics = Map.foldlWithKey (\rows value count -> (toStats value count):rows) [] (stats <> missingUtxo)
       metrics :: [Metric]
@@ -469,8 +480,8 @@ decideBetweenKeyAndCaptcha mType Nothing (Just token) FaucetConfigFile{fcfRecapt
     _ -> pure Nothing
 decideBetweenKeyAndCaptcha _ Nothing Nothing _ = pure Nothing
 
-handleSendMoney :: forall era. IsShelleyBasedEra era =>
-  CardanoEra era
+handleSendMoney :: ()
+  => ShelleyBasedEra era
   -> FaucetState era
   -> Text
   -> Maybe Text
@@ -480,9 +491,8 @@ handleSendMoney :: forall era. IsShelleyBasedEra era =>
   -> Maybe ForwardedFor
   -> Maybe Text
   -> Servant.Handler (Headers '[Header "Access-Control-Allow-Origin" Text] SendMoneyReply)
-handleSendMoney era fs@FaucetState{fsUtxoTMVar,fsPaymentSkey,fsTxQueue,fsConfig,fsSendMoneyRateLimitState} addr mType mApiKey mToken remoteip mForwardedFor mOrigin = do
+handleSendMoney sbe fs@FaucetState{fsUtxoTMVar,fsPaymentSkey,fsTxQueue,fsConfig,fsSendMoneyRateLimitState} addr mType mApiKey mToken remoteip mForwardedFor mOrigin = do
   let clientIP = pickIp mForwardedFor remoteip
-  let sbe = shelleyBasedEra @era
   eResult <- liftIO $ runExceptT $ do
     addressAny <- parseAddress addr
     mReply <- liftIO $ decideBetweenKeyAndCaptcha mType mApiKey mToken fsConfig
@@ -510,10 +520,9 @@ handleSendMoney era fs@FaucetState{fsUtxoTMVar,fsPaymentSkey,fsTxQueue,fsConfig,
     txinout@(txin, txout) <- case result of
       Left err -> left err
       Right txinout -> pure txinout
-    eraInMode <- convertEra era
-    (mintedValue, mintField, extraKeys) <- getOptionalMintOutput fs era limitFaucetValue
+    (mintedValue, mintField, extraKeys) <- getOptionalMintOutput sbe fs limitFaucetValue
     let
-      feeLovelace = Lovelace 200000
+      feeLovelace = L.Coin 200_000
       txInValue = txoutToValue txout
       valueUserShouldReceive = txInValue <> mintedValue <> (negateValue $ lovelaceToValue feeLovelace)
       outputs :: [TxOutAnyEra]
@@ -523,8 +532,8 @@ handleSendMoney era fs@FaucetState{fsUtxoTMVar,fsPaymentSkey,fsTxQueue,fsConfig,
     putStrLn $ format ("user should receive: " % sh) valueUserShouldReceive
     putStrLn $ format (sh % ": sending funds to address " % st % " via txid " % sh) clientIP (serialiseAddress addressAny) txid
     let
-      prettyTx = friendlyTxBS era signedTx
-    liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode signedTx eraInMode, prettyTx)
+      prettyTx = prettyFriendlyTx sbe signedTx
+    liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode sbe signedTx, prettyTx)
     return $ SendMoneyReplySuccess $ SendMoneySent txid txin limitFaucetValue
   let corsHeader = getCorsReply (fcfAllowedCorsOrigins fsConfig) mOrigin
   case eResult of

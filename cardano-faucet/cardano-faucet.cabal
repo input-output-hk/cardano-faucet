@@ -1,7 +1,7 @@
 cabal-version: 3.0
 
 name:                   cardano-faucet
-version:                8.3
+version:                8.10
 description:            The Cardano command-line interface.
 author:                 IOHK
 maintainer:             operations@iohk.io
@@ -61,8 +61,8 @@ library
                       , MissingH
                       , bytestring
                       , cardano-addresses
-                      , cardano-api
-                      , cardano-cli ^>= 8.6.1.0
+                      , cardano-api ^>= 8.45.2
+                      , cardano-cli ^>= 8.23
                       , cardano-prelude
                       , containers
                       , either

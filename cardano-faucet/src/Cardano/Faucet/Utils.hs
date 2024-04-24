@@ -3,15 +3,22 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs #-}
 
 module Cardano.Faucet.Utils where
 
-import Cardano.Api (TxIn, TxOut(TxOut), CtxUTxO, Lovelace, CardanoEra, TxFee, txFeesExplicitInEra, TxFee(TxFeeImplicit, TxFeeExplicit), anyCardanoEra, TxValidityLowerBound(TxValidityNoLowerBound), TxValidityUpperBound(TxValidityNoUpperBound), validityNoUpperBoundSupportedInEra)
+import Cardano.Api (TxIn, TxOut(TxOut), CtxUTxO, TxFee (..), defaultTxValidityUpperBound, TxValidityLowerBound(TxValidityNoLowerBound), TxValidityUpperBound, ShelleyBasedEra, shelleyBasedToCardanoEra, AnyCardanoEra (..), shelleyBasedEraConstraints, Tx, CardanoEra (..))
+import qualified Cardano.Api.Ledger as L
+import Cardano.Api.Shelley (ShelleyBasedEra(..))
+import qualified Cardano.CLI.Json.Friendly as CLI
+import qualified Cardano.CLI.Types.MonadWarning as CLI
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types
 import Cardano.Prelude hiding ((%))
 import Control.Concurrent.STM (TMVar, takeTMVar, putTMVar)
 import Control.Monad.Trans.Except.Extra (left)
+import qualified Data.ByteString as BS
 import Data.Map.Strict qualified as Map
 import qualified Prelude
 
@@ -65,31 +72,45 @@ findUtxoOfSize utxoTMVar value = do
     Just txinout -> pure txinout
     Nothing -> throwSTM $ FaucetWebErrorUtxoNotFound value
 
-validateTxFee ::
-     CardanoEra era
-  -> Maybe Lovelace
+validateTxFee :: ()
+  => ShelleyBasedEra era
+  -> Maybe L.Coin
   -> ExceptT FaucetWebError IO (TxFee era)
-validateTxFee era mfee = case (txFeesExplicitInEra era, mfee) of
-  (Left  implicit, Nothing)  -> return (TxFeeImplicit implicit)
-  (Right explicit, Just fee) -> return (TxFeeExplicit explicit fee)
-  (Right _, Nothing) -> txFeatureMismatch era
-  (Left  _, Just _)  -> txFeatureMismatch era
+validateTxFee sbe mfee =
+  case mfee of
+    Nothing -> txFeatureMismatch sbe -- Fees are explicit since Shelley
+    Just fee -> return $ TxFeeExplicit sbe fee
 
-txFeatureMismatch ::
-     CardanoEra era
+txFeatureMismatch :: ()
+  => ShelleyBasedEra era
   -> ExceptT FaucetWebError IO a
-txFeatureMismatch era = left (FaucetWebErrorFeatureMismatch (anyCardanoEra era))
+txFeatureMismatch sbe =
+   left $ FaucetWebErrorFeatureMismatch $
+     shelleyBasedEraConstraints sbe AnyCardanoEra $ shelleyBasedToCardanoEra sbe
 
 noBoundsIfSupported ::
-     CardanoEra era
-  -> ExceptT FaucetWebError IO (TxValidityLowerBound era, TxValidityUpperBound era)
-noBoundsIfSupported era = (,)
-  <$> pure TxValidityNoLowerBound
-  <*> noUpperBoundIfSupported era
+     ShelleyBasedEra era
+  -> (TxValidityLowerBound era, TxValidityUpperBound era)
+noBoundsIfSupported sbe = (TxValidityNoLowerBound, defaultTxValidityUpperBound sbe)
 
-noUpperBoundIfSupported ::
-     CardanoEra era
-  -> ExceptT FaucetWebError IO (TxValidityUpperBound era)
-noUpperBoundIfSupported era = case validityNoUpperBoundSupportedInEra era of
-  Nothing -> txFeatureMismatch era
-  Just supported -> return (TxValidityNoUpperBound supported)
+prettyFriendlyTx :: ()
+  => ShelleyBasedEra era
+  -> Tx era
+  -> BS.ByteString
+prettyFriendlyTx sbe tx =
+   CLI.friendlyBS CLI.FriendlyJson prettyTxAeson
+   where
+    era = shelleyBasedToCardanoEra sbe
+    prettyTxAeson = fst $ runState (CLI.runWarningStateT $ CLI.friendlyTxImpl era tx) []
+
+-- | @cardanoEraToShelleyBasedEra@ converts a 'CardanoEra' to a 'ShelleyBasedEra'
+-- or returns an error message if the era is not Shelley based.
+cardanoEraToShelleyBasedEra :: CardanoEra era -> Either Text (ShelleyBasedEra era)
+cardanoEraToShelleyBasedEra = \case
+  ByronEra   -> Left "Byron is not a Shelley based era"
+  ShelleyEra -> Right ShelleyBasedEraShelley
+  AllegraEra -> Right ShelleyBasedEraAllegra
+  MaryEra    -> Right ShelleyBasedEraMary
+  AlonzoEra  -> Right ShelleyBasedEraAlonzo
+  BabbageEra -> Right ShelleyBasedEraBabbage
+  ConwayEra  -> Right ShelleyBasedEraConway
