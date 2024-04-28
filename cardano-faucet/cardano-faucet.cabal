@@ -61,9 +61,10 @@ library
                       , MissingH
                       , bytestring
                       , cardano-addresses
-                      , cardano-api
+                      , cardano-api ^>= 8.44
                       , cardano-cli ^>= 8.22
                       , cardano-prelude
+                      , cardano-ledger-core
                       , containers
                       , either
                       , formatting

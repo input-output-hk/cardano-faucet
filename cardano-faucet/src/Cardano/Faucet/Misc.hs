@@ -2,19 +2,20 @@
 
 module Cardano.Faucet.Misc where
 
-import Cardano.Api (ConsensusModeParams(CardanoModeParams), CardanoMode, EpochSlots(EpochSlots), AddressAny, parseAddressAny, TxOutValue(TxOutAdaOnly, TxOutValue), CardanoEra, EraInMode, toEraInMode, ConsensusMode(CardanoMode),AssetId(AdaAssetId), Quantity, valueToList)
-import Cardano.Api.Shelley (Lovelace, selectLovelace, AssetId(AssetId))
+import Cardano.Api (ConsensusModeParams(CardanoModeParams), EpochSlots(EpochSlots), AddressAny, parseAddressAny, CardanoEra, AssetId(AdaAssetId), Quantity, valueToList, TxOutValue (..))
+import Cardano.Api.Shelley (selectLovelace, AssetId(AssetId))
 import Cardano.Faucet.Types
+import Cardano.Ledger.Coin (Coin)
 import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (left)
 import Data.Text qualified as T
 import Text.Parsec
 
 getValue :: TxOutValue era -> FaucetValue
-getValue (TxOutAdaOnly _ ll) = Ada ll
-getValue (TxOutValue _ val) = convertRemaining remaining
+getValue (TxOutValueByron ll) = Ada ll
+getValue (TxOutValueShelleyBased val) = convertRemaining remaining
   where
-    ll :: Lovelace
+    ll :: Coin
     ll = selectLovelace val
     isntAda :: (AssetId, Quantity) -> Bool
     isntAda (AdaAssetId, _) = False
@@ -37,10 +38,10 @@ stripMintingTokens (FaucetValueMultiAsset ll (FaucetMintToken _)) = Ada ll
 stripMintingTokens fv@(FaucetValueManyTokens _) = fv
 
 -- returns just the lovelace component and ignores tokens
-faucetValueToLovelace :: FaucetValue -> Lovelace
-faucetValueToLovelace (Ada ll) = ll
-faucetValueToLovelace (FaucetValueMultiAsset ll _token) = ll
-faucetValueToLovelace (FaucetValueManyTokens ll) = ll
+faucetValueToCoin :: FaucetValue -> Coin
+faucetValueToCoin (Ada ll) = ll
+faucetValueToCoin (FaucetValueMultiAsset ll _token) = ll
+faucetValueToCoin (FaucetValueManyTokens ll) = ll
 
 parseAddress :: Text -> ExceptT FaucetWebError IO AddressAny
 parseAddress addr = case parse (parseAddressAny <* eof) "" (T.unpack addr) of

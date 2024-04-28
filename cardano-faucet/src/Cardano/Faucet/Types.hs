@@ -12,11 +12,12 @@ import Prelude (fail)
 
 import Cardano.Address.Derivation (Depth(RootK, AccountK, PaymentK, PolicyK), XPrv, genMasterKeyFromMnemonic, indexFromWord32, deriveAccountPrivateKey, deriveAddressPrivateKey, Index, DerivationType(Hardened, Soft))
 import Cardano.Address.Style.Shelley (Shelley, Role(UTxOExternal, Stake), derivePolicyPrivateKey)
-import Cardano.Api (AnyCardanoEra, IsCardanoEra, TxIn, TxOut, CtxUTxO, TxInMode, CardanoMode, TxId, FileError, Lovelace, AddressAny, AssetId(AssetId, AdaAssetId), Quantity, SigningKey, PaymentExtendedKey, VerificationKey, HashableScriptData)
+import Cardano.Api (AnyCardanoEra, IsCardanoEra, TxIn, TxOut, CtxUTxO, TxInMode, TxId, FileError, AddressAny, AssetId(AssetId, AdaAssetId), Quantity, SigningKey, PaymentExtendedKey, VerificationKey, HashableScriptData)
 import Cardano.Api.Shelley (PoolId, StakeExtendedKey, StakeCredential, AssetName(..), NetworkId(Testnet, Mainnet), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey)
 import Cardano.Api (InputDecodeError)
---import Cardano.CLI.Shelley.Run.Address (SomeAddressVerificationKey(AByronVerificationKey, APaymentVerificationKey, APaymentExtendedVerificationKey, AGenesisUTxOVerificationKey), ShelleyAddressCmdError, buildShelleyAddress)
+--import Cardano.CLI.Shelley.Run.Address (SomeAddressVerificationKey(AByronVerificationKey, APaymentVerificationKey, APaymentExtendedVerificationKey, AGenesisUTxOVerificationKey), AddressCmdError, buildShelleyAddress)
 --import Cardano.CLI.Shelley.Run.Transaction (ShelleyTxCmdError, renderShelleyTxCmdError)
+import Cardano.Ledger.Coin (Coin)
 import Cardano.Mnemonic (mkSomeMnemonic, getMkSomeMnemonicError)
 import Cardano.Prelude
 import Control.Concurrent.STM (TMVar, TQueue)
@@ -35,7 +36,7 @@ import Data.Time.Clock (UTCTime, NominalDiffTime)
 import Prelude (String, error, read)
 import Servant (FromHttpApiData(parseHeader, parseQueryParam, parseUrlPiece))
 import Web.Internal.FormUrlEncoded (ToForm(toForm), fromEntriesByKey)
-import Cardano.CLI.Types.Errors.ShelleyAddressCmdError (ShelleyAddressCmdError)
+import Cardano.CLI.Types.Errors.AddressCmdError (AddressCmdError)
 
 -- the sitekey, secretkey, and token from recaptcha
 newtype SiteKey = SiteKey { unSiteKey :: Text } deriving Show
@@ -63,7 +64,7 @@ data FaucetError = FaucetErrorSocketNotFound
   | FaucetErrorConfigFileNotSet
   | FaucetErrorBadMnemonic Text
   | FaucetErrorBadIdx
-  | FaucetErrorShelleyAddr ShelleyAddressCmdError
+  | FaucetErrorShelleyAddr AddressCmdError
   | FaucetErrorTodo2 Text
   deriving Generic
 
@@ -106,9 +107,9 @@ data ApiKey = Recaptcha Text | ApiKey Text deriving (Ord, Eq)
 -- the state of the entire faucet
 data IsCardanoEra era => FaucetState era = FaucetState
   { fsUtxoTMVar :: TMVar (Map TxIn (TxOut CtxUTxO era))
-  , fsStakeTMVar :: TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, Lovelace, PoolId)])
+  , fsStakeTMVar :: TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, Coin, PoolId)])
   , fsNetwork :: NetworkId
-  , fsTxQueue :: TQueue (TxInMode CardanoMode, ByteString)
+  , fsTxQueue :: TQueue (TxInMode {- CardanoMode -}, ByteString)
   , fsRootKey :: Shelley 'RootK XPrv
   , fsPaymentSkey :: ShelleyWitnessSigningKey
   , fsPaymentVkey :: VerificationKey PaymentExtendedKey
@@ -138,10 +139,10 @@ data SendMoneySent = SendMoneySent
   , amount :: FaucetValue
   }
 
-data StakeKeyIntermediateState = StakeKeyIntermediateStateNotRegistered Word32 | StakeKeyIntermediateStateRegistered (Word32, SigningKey StakeExtendedKey, StakeCredential, Lovelace)
+data StakeKeyIntermediateState = StakeKeyIntermediateStateNotRegistered Word32 | StakeKeyIntermediateStateRegistered (Word32, SigningKey StakeExtendedKey, StakeCredential, Coin)
 
-data StakeKeyState = StakeKeyRegistered Word32 (SigningKey StakeExtendedKey) StakeCredential Lovelace
-  | StakeKeyDelegated Word32 Lovelace PoolId
+data StakeKeyState = StakeKeyRegistered Word32 (SigningKey StakeExtendedKey) StakeCredential Coin
+  | StakeKeyDelegated Word32 Coin PoolId
   | StakeKeyNotRegistered Word32 deriving Show
 
 -- the full reply type for /send-money
@@ -163,7 +164,7 @@ instance Aeson.ToJSON DelegationReply where
 -- a complete description of an api key
 data ApiKeyValue = ApiKeyValue
   { akvApiKey :: Text
-  , akvLovelace :: Lovelace
+  , akvCoin :: Coin
   , akvRateLimit :: NominalDiffTime
   , akvTokens :: Maybe FaucetToken
   , akvCanDelegate :: Bool
@@ -172,7 +173,7 @@ data ApiKeyValue = ApiKeyValue
 instance Aeson.FromJSON ApiKeyValue where
   parseJSON = Aeson.withObject "ApiKeyValue" $ \v -> do
     akvApiKey <- v .: "api_key"
-    akvLovelace <- v .: "lovelace"
+    akvCoin <- v .: "lovelace"
     akvRateLimit <- v .: "rate_limit"
     akvTokens <- v .:? "tokens"
     akvCanDelegate <- fromMaybe False <$> v .:? "delegate"
@@ -220,9 +221,9 @@ instance Aeson.FromJSON FaucetConfigFile where
 
 -- a value with only ada, or a value containing a mix of assets
 -- TODO, maybe replace with the cardano Value type?
-data FaucetValue = Ada Lovelace
-  | FaucetValueMultiAsset Lovelace FaucetToken
-  | FaucetValueManyTokens Lovelace deriving (Show, Eq, Ord)
+data FaucetValue = Ada Coin
+  | FaucetValueMultiAsset Coin FaucetToken
+  | FaucetValueManyTokens Coin deriving (Show, Eq, Ord)
 
 --tokenToValue :: FaucetToken -> Value
 --tokenToValue (FaucetToken (AssetId policyid token, q)) = object [ "policyid" .= policyid, "token" .= token, "quantity" .= q ]
