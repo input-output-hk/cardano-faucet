@@ -13,7 +13,7 @@ import Text.Parsec
 
 getValue :: TxOutValue era -> FaucetValue
 getValue (TxOutValueByron ll) = Ada ll
-getValue (TxOutValueShelleyBased val) = convertRemaining remaining
+getValue (TxOutValueShelleyBased _ val) = convertRemaining remaining
   where
     ll :: Coin
     ll = selectLovelace val
@@ -48,13 +48,14 @@ parseAddress addr = case parse (parseAddressAny <* eof) "" (T.unpack addr) of
   Right a -> return $ a
   Left e -> left $ FaucetWebErrorInvalidAddress addr (show e)
 
-defaultCModeParams :: ConsensusModeParams CardanoMode
+defaultCModeParams :: ConsensusModeParams
 defaultCModeParams = CardanoModeParams (EpochSlots defaultByronEpochSlots)
 
+-- TODO: This is correct for mainnet, but may not be correct for other networks.
 defaultByronEpochSlots :: Word64
 defaultByronEpochSlots = 21600
 
-convertEra :: Monad m => CardanoEra era -> ExceptT FaucetWebError m (EraInMode era CardanoMode)
+convertEra :: Monad m => CardanoEra era -> ExceptT FaucetWebError m era
 convertEra era = case (toEraInMode era CardanoMode) of
   Just eraInMode -> pure eraInMode
   Nothing -> left $ FaucetWebErrorEraConversion
