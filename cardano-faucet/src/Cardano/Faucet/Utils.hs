@@ -6,9 +6,10 @@
 
 module Cardano.Faucet.Utils where
 
-import Cardano.Api (TxIn, TxOut(TxOut), CtxUTxO, Lovelace, CardanoEra, TxFee, txFeesExplicitInEra, TxFee(TxFeeImplicit, TxFeeExplicit), anyCardanoEra, TxValidityLowerBound(TxValidityNoLowerBound), TxValidityUpperBound(TxValidityNoUpperBound), validityNoUpperBoundSupportedInEra)
+import Cardano.Api (TxIn, TxOut(TxOut), CtxUTxO, CardanoEra, TxFee (..), TxValidityLowerBound (..), TxValidityUpperBound (..), anyCardanoEra)
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types
+import Cardano.Ledger.Coin (Coin)
 import Cardano.Prelude hiding ((%))
 import Control.Concurrent.STM (TMVar, takeTMVar, putTMVar)
 import Control.Monad.Trans.Except.Extra (left)
@@ -67,7 +68,7 @@ findUtxoOfSize utxoTMVar value = do
 
 validateTxFee ::
      CardanoEra era
-  -> Maybe Lovelace
+  -> Maybe Coin 
   -> ExceptT FaucetWebError IO (TxFee era)
 validateTxFee era mfee = case (txFeesExplicitInEra era, mfee) of
   (Left  implicit, Nothing)  -> return (TxFeeImplicit implicit)

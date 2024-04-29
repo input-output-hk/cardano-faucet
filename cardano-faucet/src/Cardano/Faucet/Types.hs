@@ -15,8 +15,6 @@ import Cardano.Address.Style.Shelley (Shelley, Role(UTxOExternal, Stake), derive
 import Cardano.Api (AnyCardanoEra, IsCardanoEra, TxIn, TxOut, CtxUTxO, TxInMode, TxId, FileError, AddressAny, AssetId(AssetId, AdaAssetId), Quantity, SigningKey, PaymentExtendedKey, VerificationKey, HashableScriptData)
 import Cardano.Api.Shelley (PoolId, StakeExtendedKey, StakeCredential, AssetName(..), NetworkId(Testnet, Mainnet), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey)
 import Cardano.Api (InputDecodeError)
---import Cardano.CLI.Shelley.Run.Address (SomeAddressVerificationKey(AByronVerificationKey, APaymentVerificationKey, APaymentExtendedVerificationKey, AGenesisUTxOVerificationKey), AddressCmdError, buildShelleyAddress)
---import Cardano.CLI.Shelley.Run.Transaction (ShelleyTxCmdError, renderShelleyTxCmdError)
 import Cardano.Ledger.Coin (Coin)
 import Cardano.Mnemonic (mkSomeMnemonic, getMkSomeMnemonicError)
 import Cardano.Prelude
@@ -221,7 +219,8 @@ instance Aeson.FromJSON FaucetConfigFile where
 
 -- a value with only ada, or a value containing a mix of assets
 -- TODO, maybe replace with the cardano Value type?
-data FaucetValue = Ada Coin
+data FaucetValue
+  = Ada Coin
   | FaucetValueMultiAsset Coin FaucetToken
   | FaucetValueManyTokens Coin deriving (Show, Eq, Ord)
 
