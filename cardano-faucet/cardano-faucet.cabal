@@ -61,7 +61,7 @@ library
                       , MissingH
                       , bytestring
                       , cardano-addresses
-                      , cardano-api ^>= 8.44
+                      , cardano-api ^>= 8.44.0.0
                       , cardano-cli ^>= 8.22
                       , cardano-prelude
                       , cardano-ledger-core

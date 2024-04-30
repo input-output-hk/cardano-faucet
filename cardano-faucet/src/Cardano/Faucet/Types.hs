@@ -62,7 +62,7 @@ data FaucetError = FaucetErrorSocketNotFound
   | FaucetErrorConfigFileNotSet
   | FaucetErrorBadMnemonic Text
   | FaucetErrorBadIdx
-  | FaucetErrorShelleyAddr AddressCmdError
+  | FaucetErrorShelleyAddr -- ShelleyAddressCmdError
   | FaucetErrorTodo2 Text
   deriving Generic
 
@@ -73,7 +73,7 @@ renderFaucetError (FaucetErrorParsingConfig err) = show err
 renderFaucetError FaucetErrorConfigFileNotSet = "$CONFIG_FILE not set"
 renderFaucetError (FaucetErrorBadMnemonic msg) = "bad mnemonic " <> msg
 renderFaucetError FaucetErrorBadIdx = "bad index"
-renderFaucetError (FaucetErrorShelleyAddr err) = show err
+renderFaucetError (FaucetErrorShelleyAddr {-err-}) = undefined -- show err
 renderFaucetError (FaucetErrorTodo2 err) = show err
 
 -- errors that can be sent to the user
@@ -84,7 +84,7 @@ data FaucetWebError = FaucetWebErrorInvalidAddress Text Text
   | FaucetWebErrorUtxoNotFound FaucetValue
   | FaucetWebErrorEraConversion
   | FaucetWebErrorTodo Text
-  | FaucetWebErrorFeatureMismatch AnyCardanoEra
+  | FaucetWebErrorFeatureMismatch -- AnyCardanoEra
   | FaucetWebErrorConsensusModeMismatchTxBalance Text AnyCardanoEra
   | FaucetWebErrorEraMismatch Text
   | FaucetWebErrorAutoBalance Text
@@ -107,7 +107,7 @@ data IsCardanoEra era => FaucetState era = FaucetState
   { fsUtxoTMVar :: TMVar (Map TxIn (TxOut CtxUTxO era))
   , fsStakeTMVar :: TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, Coin, PoolId)])
   , fsNetwork :: NetworkId
-  , fsTxQueue :: TQueue (TxInMode {- CardanoMode -}, ByteString)
+  , fsTxQueue :: TQueue (TxInMode, ByteString)
   , fsRootKey :: Shelley 'RootK XPrv
   , fsPaymentSkey :: ShelleyWitnessSigningKey
   , fsPaymentVkey :: VerificationKey PaymentExtendedKey
@@ -162,7 +162,7 @@ instance Aeson.ToJSON DelegationReply where
 -- a complete description of an api key
 data ApiKeyValue = ApiKeyValue
   { akvApiKey :: Text
-  , akvCoin :: Coin
+  , akvLovelace :: Coin
   , akvRateLimit :: NominalDiffTime
   , akvTokens :: Maybe FaucetToken
   , akvCanDelegate :: Bool
@@ -171,7 +171,7 @@ data ApiKeyValue = ApiKeyValue
 instance Aeson.FromJSON ApiKeyValue where
   parseJSON = Aeson.withObject "ApiKeyValue" $ \v -> do
     akvApiKey <- v .: "api_key"
-    akvCoin <- v .: "lovelace"
+    akvLovelace <- v .: "lovelace"
     akvRateLimit <- v .: "rate_limit"
     akvTokens <- v .:? "tokens"
     akvCanDelegate <- fromMaybe False <$> v .:? "delegate"
@@ -219,8 +219,7 @@ instance Aeson.FromJSON FaucetConfigFile where
 
 -- a value with only ada, or a value containing a mix of assets
 -- TODO, maybe replace with the cardano Value type?
-data FaucetValue
-  = Ada Coin
+data FaucetValue = Ada Coin
   | FaucetValueMultiAsset Coin FaucetToken
   | FaucetValueManyTokens Coin deriving (Show, Eq, Ord)
 

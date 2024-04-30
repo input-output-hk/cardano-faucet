@@ -15,9 +15,9 @@
 
 module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest(..)) where
 
-import Cardano.Api (CardanoEra, IsShelleyBasedEra, TxInMode(TxInMode), Lovelace(Lovelace), IsCardanoEra, TxCertificates(TxCertificatesNone), serialiseAddress, SigningKey(PaymentExtendedSigningKey), PaymentExtendedKey, makeStakeAddressPoolDelegationCertificate)
-import Cardano.Api.Shelley (StakeCredential, PoolId, TxCertificates(TxCertificates), certificatesSupportedInEra, BuildTxWith(BuildTxWith), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForStakeAddr), StakeExtendedKey, serialiseToBech32, AssetId(AssetId, AdaAssetId), PolicyId(PolicyId), serialiseToRawBytesHexText, AssetName(AssetName), TxMintValue(TxMintNone, TxMintValue), AddressAny, multiAssetSupportedInEra, valueFromList, ScriptWitness(SimpleScriptWitness), SimpleScript(RequireSignature), SimpleScriptOrReferenceInput(SScript), scriptLanguageSupportedInEra, ScriptLanguage(SimpleScriptLanguage), shelleyBasedEra, Tx, TxId, verificationKeyHash, getVerificationKey, castVerificationKey, VerificationKey, Quantity(Quantity), scriptPolicyId, TxOut(TxOut), TxOutValue(TxOutAdaOnly, TxOutValue), lovelaceToValue, negateValue, Value, BuildTx, CtxUTxO, WitCtxMint, Script(SimpleScript), SimpleScript, SimpleScript', ShelleyWitnessSigningKey(WitnessPaymentExtendedKey, WitnessStakeExtendedKey))
-import Cardano.Faucet.Misc (convertEra, parseAddress, toFaucetValue, faucetValueToLovelace, stripMintingTokens)
+import Cardano.Api (CardanoEra, IsShelleyBasedEra, TxInMode(TxInMode), IsCardanoEra, TxCertificates(TxCertificatesNone), serialiseAddress, SigningKey(PaymentExtendedSigningKey), PaymentExtendedKey, makeStakeAddressPoolDelegationCertificate)
+import Cardano.Api.Shelley (StakeCredential, PoolId, TxCertificates(TxCertificates), certificatesSupportedInEra, BuildTxWith(BuildTxWith), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForStakeAddr), StakeExtendedKey, serialiseToBech32, AssetId(AssetId, AdaAssetId), PolicyId(PolicyId), serialiseToRawBytesHexText, AssetName(AssetName), TxMintValue(TxMintNone, TxMintValue), AddressAny, multiAssetSupportedInEra, valueFromList, ScriptWitness(SimpleScriptWitness), SimpleScript(RequireSignature), SimpleScriptOrReferenceInput(SScript), scriptLanguageSupportedInEra, ScriptLanguage(SimpleScriptLanguage), shelleyBasedEra, Tx, TxId, verificationKeyHash, getVerificationKey, castVerificationKey, VerificationKey, Quantity(Quantity), scriptPolicyId, TxOut(TxOut), TxOutValue(..), lovelaceToValue, negateValue, Value, BuildTx, CtxUTxO, WitCtxMint, Script(SimpleScript), SimpleScript, SimpleScript', ShelleyWitnessSigningKey(WitnessPaymentExtendedKey, WitnessStakeExtendedKey))
+import Cardano.Faucet.Misc (convertEra, parseAddress, toFaucetValue, faucetValueToCoin, stripMintingTokens)
 import Cardano.Faucet.TxUtils (makeAndSignTx, Fee(..))
 import Cardano.Faucet.Types (CaptchaToken, ForwardedFor(..), SendMoneyReply(..), DelegationReply(..), SiteVerifyReply(..), SiteVerifyRequest(..), SecretKey, FaucetState(..), ApiKeyValue(..), RateLimitResult(..), ApiKey(..), RateLimitAddress(..), UtxoStats(..), FaucetValue(..), FaucetConfigFile(..), FaucetWebError(..), SiteKey(..), SendMoneySent(..), FaucetToken(FaucetToken, FaucetMintToken), rootKeyToPolicyKey)
 import Cardano.Faucet.Utils (findUtxoOfSize, computeUtxoStats)
@@ -420,7 +420,7 @@ handleMetrics FaucetState{fsUtxoTMVar,fsBucketSizes,fsConfig,fsStakeTMVar} = do
       valueAttribute :: FaucetValue -> [Maybe (Text, MetricValue)]
       valueAttribute fv = [Just ("lovelace", MetricValueInt l), Just ("ada",MetricValueFloat $ (fromIntegral l) / 1000000)]
         where
-          Lovelace l = faucetValueToLovelace fv
+          Lovelace l = faucetValueToCoin fv
       tokenAttributes :: FaucetToken -> [Maybe (Text, MetricValue)]
       tokenAttributes (FaucetToken (AssetId (PolicyId scripthash) (AssetName _tokenname), _quant)) = [
           Just ("policyid", MetricValueStr $ serialiseToRawBytesHexText scripthash)

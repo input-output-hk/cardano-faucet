@@ -15,6 +15,7 @@ import Control.Concurrent.STM (TMVar, takeTMVar, putTMVar)
 import Control.Monad.Trans.Except.Extra (left)
 import Data.Map.Strict qualified as Map
 import qualified Prelude
+import qualified Cardano.Api.Ledger as L
 
 computeUtxoStats :: Map TxIn (TxOut CtxUTxO era) -> UtxoStats
 computeUtxoStats utxo = do
@@ -67,30 +68,20 @@ findUtxoOfSize utxoTMVar value = do
     Nothing -> throwSTM $ FaucetWebErrorUtxoNotFound value
 
 validateTxFee ::
-     CardanoEra era
-  -> Maybe Coin 
+     ShelleyBasedEra era
+  -> Maybe Coin
   -> ExceptT FaucetWebError IO (TxFee era)
-validateTxFee era mfee = case (txFeesExplicitInEra era, mfee) of
-  (Left  implicit, Nothing)  -> return (TxFeeImplicit implicit)
-  (Right explicit, Just fee) -> return (TxFeeExplicit explicit fee)
-  (Right _, Nothing) -> txFeatureMismatch era
-  (Left  _, Just _)  -> txFeatureMismatch era
+validateTxFee sbe mfee =
+  case mfee of
+    Nothing -> txFeatureMismatch sbe -- Fees are explicit since Shelley
+    Just fee -> return $ TxFeeExplicit sbe fee
 
 txFeatureMismatch ::
-     CardanoEra era
+     ShelleyBasedEra era
   -> ExceptT FaucetWebError IO a
-txFeatureMismatch era = left (FaucetWebErrorFeatureMismatch (anyCardanoEra era))
+txFeatureMismatch era = left $ FaucetWebErrorFeatureMismatch -- (anyCardanoEra era))
 
 noBoundsIfSupported ::
-     CardanoEra era
-  -> ExceptT FaucetWebError IO (TxValidityLowerBound era, TxValidityUpperBound era)
-noBoundsIfSupported era = (,)
-  <$> pure TxValidityNoLowerBound
-  <*> noUpperBoundIfSupported era
-
-noUpperBoundIfSupported ::
-     CardanoEra era
-  -> ExceptT FaucetWebError IO (TxValidityUpperBound era)
-noUpperBoundIfSupported era = case validityNoUpperBoundSupportedInEra era of
-  Nothing -> txFeatureMismatch era
-  Just supported -> return (TxValidityNoUpperBound supported)
+     ShelleyBasedEra era
+  -> (TxValidityLowerBound era, TxValidityUpperBound era)
+noBoundsIfSupported sbe = (TxValidityNoLowerBound, defaultTxValidityUpperBound sbe)

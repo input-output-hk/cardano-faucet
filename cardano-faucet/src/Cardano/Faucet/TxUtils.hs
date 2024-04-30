@@ -1,4 +1,5 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -6,7 +7,7 @@ module Cardano.Faucet.TxUtils where
 
 import Cardano.Api (Lovelace, IsShelleyBasedEra, ShelleyBasedEra, TxIn, TxOut(TxOut), CtxUTxO, TxBody, TxBodyContent(TxBodyContent), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForSpending), TxInsCollateral(TxInsCollateralNone), TxInsReference(TxInsReferenceNone), TxTotalCollateral(TxTotalCollateralNone), TxReturnCollateral(TxReturnCollateralNone), TxMetadataInEra(TxMetadataNone), TxAuxScripts(TxAuxScriptsNone), TxExtraKeyWitnesses(TxExtraKeyWitnessesNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates, BuildTxWith(BuildTxWith), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(..), TxScriptValidity(TxScriptValidityNone), shelleyBasedToCardanoEra, Tx, makeShelleyKeyWitness, makeSignedTransaction, TxId, getTxId, BuildTx, ShelleyWitnessSigningKey, AddressAny)
 import Cardano.Api.Shelley (lovelaceToValue, Value, createAndValidateTransactionBody, TxGovernanceActions(TxGovernanceActionsNone), TxVotes(TxVotesNone))
-import Cardano.Faucet.Misc (getValue, faucetValueToLovelace)
+import Cardano.Faucet.Misc (getValue, faucetValueToCoin)
 import Cardano.Faucet.Types (FaucetWebError(..), FaucetValue)
 import Cardano.Faucet.Utils
 import Cardano.Prelude hiding ((%))
@@ -19,7 +20,7 @@ getMintedValue :: TxMintValue BuildTx era -> Value
 getMintedValue (TxMintValue _ val _) = val
 getMintedValue (TxMintNone) = mempty
 
-newtype Fee = Fee Lovelace
+newtype Fee = Fee Coin
 
 txBuild :: IsShelleyBasedEra era
   => ShelleyBasedEra era
@@ -35,9 +36,9 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
     era = shelleyBasedToCardanoEra sbe
     unwrap :: TxOut ctx1 era1 -> FaucetValue
     unwrap (TxOut _ val _ _) = getValue val
-    value :: Lovelace
-    value = faucetValueToLovelace $ unwrap txout
-    change :: Lovelace
+    value :: Coin
+    value = faucetValueToCoin $ unwrap txout
+    change :: Coin
     change = value - fixedFee
     mintedValue = getMintedValue minting
     -- TODO, add minted tokens
@@ -52,7 +53,7 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
     <$> pure [(txin, BuildTxWith $ KeyWitness KeyWitnessForSpending)]
     <*> pure TxInsCollateralNone
     <*> pure TxInsReferenceNone
-    <*> mapM (\x -> withExceptT (FaucetWebErrorTodo . renderShelleyTxCmdError) $ toTxOutInAnyEra era x) (getTxOuts addressOrOutputs)
+    <*> mapM (\x -> withExceptT (FaucetWebErrorTodo . renderTxCmdError) $ toTxOutInAnyEra sbe x) (getTxOuts addressOrOutputs)
     <*> pure TxTotalCollateralNone
     <*> pure TxReturnCollateralNone
     <*> validateTxFee era (Just fixedFee)
@@ -121,7 +122,7 @@ txSign :: IsShelleyBasedEra era
 txSign txBody sks = tx
   --let (sksByron, sksShelley) = partitionSomeWitnesses $ map categoriseSomeWitness sks
   where
-    shelleyKeyWitnesses = map (makeShelleyKeyWitness txBody) sks
+    shelleyKeyWitnesses :: _ = map (makeShelleyKeyWitness txBody) sks
     tx = makeSignedTransaction shelleyKeyWitnesses txBody
 
 makeAndSignTx :: IsShelleyBasedEra era

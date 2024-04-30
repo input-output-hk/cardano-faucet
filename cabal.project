@@ -57,3 +57,9 @@ source-repository-package
     --sha256: sha256-saxnZMeeZcASesw2Fgg9X0I8YFQ7p8jD25TMt782i2s=
     subdir: command-line
             core
+
+source-repository-package
+   type: git
+   location: https://github.com/IntersectMBO/cardano-cli
+   subdir: cardano-cli
+   tag: 9ad192e6364f

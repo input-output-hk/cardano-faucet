@@ -10,18 +10,21 @@ import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (left)
 import Data.Text qualified as T
 import Text.Parsec
+import qualified Cardano.Api as Api
 
 getValue :: TxOutValue era -> FaucetValue
 getValue (TxOutValueByron ll) = Ada ll
-getValue (TxOutValueShelleyBased _ val) = convertRemaining remaining
+getValue (TxOutValueShelleyBased sbe val) = convertRemaining remaining
   where
+    apiValue :: Api.Value
+    apiValue = Api.fromLedgerValue sbe val
     ll :: Coin
-    ll = selectLovelace val
+    ll = selectLovelace apiValue
     isntAda :: (AssetId, Quantity) -> Bool
     isntAda (AdaAssetId, _) = False
     isntAda (AssetId _ _, _) = True
     remaining :: [(AssetId, Quantity)]
-    remaining = filter isntAda (valueToList val)
+    remaining = filter isntAda (valueToList apiValue)
     convertRemaining :: [(AssetId, Quantity)] -> FaucetValue
     convertRemaining [t] = FaucetValueMultiAsset ll (FaucetToken t)
     convertRemaining [] = Ada ll
