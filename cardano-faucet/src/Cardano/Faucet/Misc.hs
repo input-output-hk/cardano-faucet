@@ -59,6 +59,8 @@ defaultByronEpochSlots :: Word64
 defaultByronEpochSlots = 21600
 
 convertEra :: Monad m => CardanoEra era -> ExceptT FaucetWebError m era
-convertEra era = case (toEraInMode era CardanoMode) of
-  Just eraInMode -> pure eraInMode
-  Nothing -> left $ FaucetWebErrorEraConversion
+convertEra era =
+  case (toEraInMode era CardanoMode) of
+    Just eraInMode -> pure eraInMode
+    Nothing -> left $ FaucetWebErrorEraConversion
+

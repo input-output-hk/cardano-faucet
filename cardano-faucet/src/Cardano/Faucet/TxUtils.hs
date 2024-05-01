@@ -5,16 +5,17 @@
 
 module Cardano.Faucet.TxUtils where
 
-import Cardano.Api (Lovelace, IsShelleyBasedEra, ShelleyBasedEra, TxIn, TxOut(TxOut), CtxUTxO, TxBody, TxBodyContent(TxBodyContent), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForSpending), TxInsCollateral(TxInsCollateralNone), TxInsReference(TxInsReferenceNone), TxTotalCollateral(TxTotalCollateralNone), TxReturnCollateral(TxReturnCollateralNone), TxMetadataInEra(TxMetadataNone), TxAuxScripts(TxAuxScriptsNone), TxExtraKeyWitnesses(TxExtraKeyWitnessesNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates, BuildTxWith(BuildTxWith), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(..), TxScriptValidity(TxScriptValidityNone), shelleyBasedToCardanoEra, Tx, makeShelleyKeyWitness, makeSignedTransaction, TxId, getTxId, BuildTx, ShelleyWitnessSigningKey, AddressAny)
-import Cardano.Api.Shelley (lovelaceToValue, Value, createAndValidateTransactionBody, TxGovernanceActions(TxGovernanceActionsNone), TxVotes(TxVotesNone))
+import Cardano.Api (IsShelleyBasedEra, ShelleyBasedEra, TxIn, TxOut(TxOut), CtxUTxO, TxBody, TxBodyContent(TxBodyContent), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForSpending), TxInsCollateral(TxInsCollateralNone), TxInsReference(TxInsReferenceNone), TxTotalCollateral(TxTotalCollateralNone), TxReturnCollateral(TxReturnCollateralNone), TxMetadataInEra(TxMetadataNone), TxAuxScripts(TxAuxScriptsNone), TxExtraKeyWitnesses(TxExtraKeyWitnessesNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates, BuildTxWith(BuildTxWith), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(..), TxScriptValidity(TxScriptValidityNone), shelleyBasedToCardanoEra, Tx, makeShelleyKeyWitness, makeSignedTransaction, TxId, getTxId, BuildTx, ShelleyWitnessSigningKey, AddressAny)
+import Cardano.Api.Shelley (lovelaceToValue, Value, createAndValidateTransactionBody)
 import Cardano.Faucet.Misc (getValue, faucetValueToCoin)
 import Cardano.Faucet.Types (FaucetWebError(..), FaucetValue)
 import Cardano.Faucet.Utils
 import Cardano.Prelude hiding ((%))
+import Cardano.Ledger.Coin (Coin)
 import Control.Monad.Trans.Except.Extra (left)
 import Cardano.CLI.Types.Common
 import Cardano.CLI.Legacy.Run.Transaction
-import Cardano.CLI.Types.Errors.ShelleyTxCmdError
+import Cardano.CLI.Types.Errors.TxCmdError
 
 getMintedValue :: TxMintValue BuildTx era -> Value
 getMintedValue (TxMintValue _ val _) = val

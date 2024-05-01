@@ -6,7 +6,7 @@
 
 module Cardano.Faucet.Utils where
 
-import Cardano.Api (TxIn, TxOut(TxOut), CtxUTxO, CardanoEra, TxFee (..), TxValidityLowerBound (..), TxValidityUpperBound (..), anyCardanoEra)
+import Cardano.Api (TxIn, TxOut(TxOut), CtxUTxO, TxFee (..), ShelleyBasedEra (..), TxValidityLowerBound (..), TxValidityUpperBound (..), defaultTxValidityUpperBound)
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types
 import Cardano.Ledger.Coin (Coin)
@@ -15,7 +15,6 @@ import Control.Concurrent.STM (TMVar, takeTMVar, putTMVar)
 import Control.Monad.Trans.Except.Extra (left)
 import Data.Map.Strict qualified as Map
 import qualified Prelude
-import qualified Cardano.Api.Ledger as L
 
 computeUtxoStats :: Map TxIn (TxOut CtxUTxO era) -> UtxoStats
 computeUtxoStats utxo = do
@@ -79,7 +78,7 @@ validateTxFee sbe mfee =
 txFeatureMismatch ::
      ShelleyBasedEra era
   -> ExceptT FaucetWebError IO a
-txFeatureMismatch era = left $ FaucetWebErrorFeatureMismatch -- (anyCardanoEra era))
+txFeatureMismatch _era = left $ FaucetWebErrorFeatureMismatch -- (anyCardanoEra era))
 
 noBoundsIfSupported ::
      ShelleyBasedEra era
