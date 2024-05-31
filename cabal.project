@@ -36,6 +36,9 @@ package cryptonite
 package snap-server
   flags: +openssl
 
+package bitvec
+   flags: -simd
+
 package comonad
   flags: -test-doctests
 
