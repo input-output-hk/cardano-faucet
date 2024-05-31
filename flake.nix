@@ -2,7 +2,7 @@
   description = "cardano-faucet";
 
   inputs = {
-    haskellNix.url = "github:input-output-hk/haskell.nix";
+    haskellNix.url = "github:input-output-hk/haskell.nix/a44822ac9e874fe26559713b99202a3d337b7f27";
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
     iohkNix.url = "github:input-output-hk/iohk-nix";
     incl.url = "github:divnix/incl";
@@ -65,12 +65,12 @@
           # tools we want in our shell, from hackage
           shell.tools =
             {
-              cabal = "3.10.2.0";
+              cabal = "3.10.3.0";
               ghcid = "0.8.8";
             }
             // lib.optionalAttrs (config.compiler-nix-name == defaultCompiler) {
               # tools that work only with default compiler
-              haskell-language-server.src = nixpkgs.haskell-nix.sources."hls-2.6";
+              haskell-language-server = "2.8.0.0";
               hlint = "3.6.1";
               stylish-haskell = "0.14.5.0";
             };
