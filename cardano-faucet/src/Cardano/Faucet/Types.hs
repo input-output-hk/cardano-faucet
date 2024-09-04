@@ -8,8 +8,6 @@
 
 module Cardano.Faucet.Types (FaucetValue(..), ApiKeyValue(..), FaucetToken(..), FaucetWebError(..), UtxoStats(..), CaptchaToken, ForwardedFor(..), SendMoneyReply(..), DelegationReply(..), SiteVerifyReply(..), SiteVerifyRequest(..), SecretKey, FaucetState(..), RateLimitResult(..), ApiKey(..), RateLimitAddress(..), FaucetConfigFile(..), SiteKey(..), SendMoneySent(..), rootKeyToPolicyKey, FaucetError(..), StakeKeyIntermediateState(..), StakeKeyState(..), accountKeyToStakeKey, parseConfig, mnemonicToRootKey, rootKeytoAcctKey, accountKeyToPaymentKey, renderFaucetError, test) where
 
-import Prelude (fail)
-
 import Cardano.Address.Derivation (Depth(RootK, AccountK, PaymentK, PolicyK), XPrv, genMasterKeyFromMnemonic, indexFromWord32, deriveAccountPrivateKey, deriveAddressPrivateKey, Index, DerivationType(Hardened, Soft))
 import Cardano.Address.Style.Shelley (Shelley, Role(UTxOExternal, Stake), derivePolicyPrivateKey)
 import Cardano.Api (AnyCardanoEra, InputDecodeError, TxIn, TxOut, CtxUTxO, TxInMode,  TxId, FileError, AddressAny, AssetId(AssetId, AdaAssetId), Quantity, SigningKey, PaymentExtendedKey, VerificationKey, HashableScriptData, docToText)
@@ -31,7 +29,8 @@ import Data.List.Split (splitOn)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Time.Clock (UTCTime, NominalDiffTime)
-import Prelude (String, error, read)
+import Prelude (fail, String, error, read)
+import Protolude (print)
 import Servant (FromHttpApiData(parseHeader, parseQueryParam, parseUrlPiece))
 import Web.Internal.FormUrlEncoded (ToForm(toForm), fromEntriesByKey)
 
