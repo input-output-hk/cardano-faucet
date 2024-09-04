@@ -46,6 +46,7 @@ import Ouroboros.Network.Protocol.LocalTxMonitor.Client qualified as CTxMon
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client qualified as Net.Tx
 import Paths_cardano_faucet (getDataFileName)
 import Prelude qualified
+import Protolude (print, readFile)
 import Servant
 import System.Environment (lookupEnv)
 import System.IO (hSetBuffering, BufferMode(LineBuffering))

@@ -8,7 +8,7 @@
 
 module Cardano.Faucet.Utils where
 
-import Cardano.Api (TxIn, TxOut(TxOut), CtxUTxO, TxFee (..), defaultTxValidityUpperBound, TxValidityLowerBound(TxValidityNoLowerBound), TxValidityUpperBound, ShelleyBasedEra, shelleyBasedToCardanoEra, AnyCardanoEra (..), shelleyBasedEraConstraints, Tx, CardanoEra (..))
+import Cardano.Api (toCardanoEra, TxIn, TxOut(TxOut), CtxUTxO, TxFee (..), defaultTxValidityUpperBound, TxValidityLowerBound(TxValidityNoLowerBound), TxValidityUpperBound, ShelleyBasedEra, AnyCardanoEra (..), shelleyBasedEraConstraints, Tx, CardanoEra (..))
 import qualified Cardano.Api.Ledger as L
 import Cardano.Api.Shelley (ShelleyBasedEra(..))
 import qualified Cardano.CLI.Json.Friendly as CLI
@@ -86,7 +86,7 @@ txFeatureMismatch :: ()
   -> ExceptT FaucetWebError IO a
 txFeatureMismatch sbe =
    left $ FaucetWebErrorFeatureMismatch $
-     shelleyBasedEraConstraints sbe AnyCardanoEra $ shelleyBasedToCardanoEra sbe
+     shelleyBasedEraConstraints sbe AnyCardanoEra $ toCardanoEra sbe
 
 noBoundsIfSupported ::
      ShelleyBasedEra era
@@ -100,7 +100,7 @@ prettyFriendlyTx :: ()
 prettyFriendlyTx sbe tx =
    CLI.friendlyBS CLI.FriendlyJson prettyTxAeson
    where
-    era = shelleyBasedToCardanoEra sbe
+    era = toCardanoEra sbe
     prettyTxAeson = fst $ runState (CLI.runWarningStateT $ CLI.friendlyTxImpl era tx) []
 
 -- | @cardanoEraToShelleyBasedEra@ converts a 'CardanoEra' to a 'ShelleyBasedEra'

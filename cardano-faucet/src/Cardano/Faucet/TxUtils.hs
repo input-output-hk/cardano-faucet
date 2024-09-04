@@ -69,6 +69,8 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
     <*> pure TxScriptValidityNone
     <*> pure Nothing
     <*> pure Nothing
+    <*> pure Nothing
+    <*> pure Nothing
 
   case createAndValidateTransactionBody sbe txBodyContent of
     Left err -> left $ FaucetWebErrorTodo $ show err

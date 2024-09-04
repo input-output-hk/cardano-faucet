@@ -75,6 +75,7 @@ library
                       , ouroboros-consensus
                       , ouroboros-network-protocols
                       , parsec
+                      , protolude
                       , servant-client
                       , servant-server
                       , split

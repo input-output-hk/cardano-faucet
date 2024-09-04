@@ -39,6 +39,7 @@ import Network.HTTP.Client.TLS (newTlsManagerWith, tlsManagerSettings)
 import Network.HTTP.Media.MediaType ((//), (/:))
 import Network.Socket (SockAddr(SockAddrInet))
 import Prelude qualified (id)
+import Protolude (print)
 import Servant
 import Servant.Client (ClientM, ClientError, client, runClientM, mkClientEnv, BaseUrl(BaseUrl), Scheme(Https))
 import Cardano.Address.Style.Shelley (Shelley, getKey)
