@@ -39,6 +39,11 @@ package snap-server
 package comonad
   flags: -test-doctests
 
+if os(windows)
+  -- Avoid `unknown symbol __cpu_model` when cross compilation runs TH code
+  package bitvec
+    flags: -simd
+
 -- IMPORTANT
 -- Do NOT add more source-repository-package stanzas here unless they are strictly
 -- temporary! Please read the section in CONTRIBUTING about updating dependencies.
