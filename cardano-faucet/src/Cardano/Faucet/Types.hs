@@ -1,41 +1,106 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
-module Cardano.Faucet.Types (FaucetValue(..), ApiKeyValue(..), FaucetToken(..), FaucetWebError(..), UtxoStats(..), CaptchaToken, ForwardedFor(..), SendMoneyReply(..), DelegationReply(..), SiteVerifyReply(..), SiteVerifyRequest(..), SecretKey, FaucetState(..), RateLimitResult(..), ApiKey(..), RateLimitAddress(..), FaucetConfigFile(..), SiteKey(..), SendMoneySent(..), rootKeyToPolicyKey, FaucetError(..), StakeKeyIntermediateState(..), StakeKeyState(..), accountKeyToStakeKey, parseConfig, mnemonicToRootKey, rootKeytoAcctKey, accountKeyToPaymentKey, renderFaucetError, test) where
+module Cardano.Faucet.Types (
+  FaucetValue (..),
+  ApiKeyValue (..),
+  FaucetToken (..),
+  FaucetWebError (..),
+  UtxoStats (..),
+  CaptchaToken,
+  ForwardedFor (..),
+  SendMoneyReply (..),
+  DelegationReply (..),
+  SiteVerifyReply (..),
+  SiteVerifyRequest (..),
+  SecretKey,
+  FaucetState (..),
+  RateLimitResult (..),
+  ApiKey (..),
+  RateLimitAddress (..),
+  FaucetConfigFile (..),
+  SiteKey (..),
+  SendMoneySent (..),
+  rootKeyToPolicyKey,
+  FaucetError (..),
+  StakeKeyIntermediateState (..),
+  StakeKeyState (..),
+  accountKeyToStakeKey,
+  parseConfig,
+  mnemonicToRootKey,
+  rootKeytoAcctKey,
+  accountKeyToPaymentKey,
+  renderFaucetError,
+  test,
+) where
 
-import Cardano.Address.Derivation (Depth(RootK, AccountK, PaymentK, PolicyK), XPrv, genMasterKeyFromMnemonic, indexFromWord32, deriveAccountPrivateKey, deriveAddressPrivateKey, Index, DerivationType(Hardened, Soft))
-import Cardano.Address.Style.Shelley (Shelley, Role(UTxOExternal, Stake), derivePolicyPrivateKey)
-import Cardano.Api (AnyCardanoEra, InputDecodeError, TxIn, TxOut, CtxUTxO, TxInMode,  TxId, FileError, AddressAny, AssetId(AssetId, AdaAssetId), Quantity, SigningKey, PaymentExtendedKey, VerificationKey, HashableScriptData, docToText)
-import qualified Cardano.Api.Ledger as L
-import Cardano.Api.Shelley (PoolId, StakeExtendedKey, StakeCredential, AssetName(..), NetworkId(Testnet, Mainnet), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey)
+import Cardano.Address.Derivation (
+  Depth (AccountK, PaymentK, PolicyK, RootK),
+  DerivationType (Hardened, Soft),
+  Index,
+  XPrv,
+  deriveAccountPrivateKey,
+  deriveAddressPrivateKey,
+  genMasterKeyFromMnemonic,
+  indexFromWord32,
+ )
+import Cardano.Address.Style.Shelley (Role (Stake, UTxOExternal), Shelley, derivePolicyPrivateKey)
+import Cardano.Api (
+  AddressAny,
+  AnyCardanoEra,
+  AssetId (AdaAssetId, AssetId),
+  CtxUTxO,
+  FileError,
+  HashableScriptData,
+  InputDecodeError,
+  PaymentExtendedKey,
+  Quantity,
+  SigningKey,
+  TxId,
+  TxIn,
+  TxInMode,
+  TxOut,
+  VerificationKey,
+  docToText,
+ )
+import Cardano.Api.Ledger qualified as L
+import Cardano.Api.Shelley (
+  AssetName (..),
+  NetworkId (Mainnet, Testnet),
+  NetworkMagic (NetworkMagic),
+  PoolId,
+  ShelleyWitnessSigningKey,
+  StakeCredential,
+  StakeExtendedKey,
+ )
 import Cardano.CLI.Types.Errors.AddressCmdError
-import Cardano.Mnemonic (mkSomeMnemonic, getMkSomeMnemonicError)
+import Cardano.Mnemonic (getMkSomeMnemonicError, mkSomeMnemonic)
 import Cardano.Prelude
 import Control.Concurrent.STM (TMVar, TQueue)
 import Control.Monad.Trans.Except.Extra (left)
-import Data.Aeson ((.=), (.:), (.:?))
-import qualified Data.Aeson as Aeson
-import Data.Aeson.Types (Parser)
+import Data.Aeson ((.:), (.:?), (.=))
+import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap (member)
+import Data.Aeson.Types (Parser)
 import Data.ByteString.Char8 qualified as BSC
 import Data.Either.Combinators (mapRight)
 import Data.IP (IPv4)
 import Data.List.Split (splitOn)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
-import Data.Time.Clock (UTCTime, NominalDiffTime)
-import Prelude (fail, String, error, read)
+import Data.Time.Clock (NominalDiffTime, UTCTime)
 import Protolude (print)
-import Servant (FromHttpApiData(parseHeader, parseQueryParam, parseUrlPiece))
-import Web.Internal.FormUrlEncoded (ToForm(toForm), fromEntriesByKey)
+import Servant (FromHttpApiData (parseHeader, parseQueryParam, parseUrlPiece))
+import Web.Internal.FormUrlEncoded (ToForm (toForm), fromEntriesByKey)
+import Prelude (String, error, fail, read)
 
 -- the sitekey, secretkey, and token from recaptcha
-newtype SiteKey = SiteKey { unSiteKey :: Text } deriving Show
-newtype SecretKey = SecretKey { unSecretKey :: Text } deriving Show
+newtype SiteKey = SiteKey {unSiteKey :: Text} deriving (Show)
+newtype SecretKey = SecretKey {unSecretKey :: Text} deriving (Show)
 newtype CaptchaToken = CaptchaToken Text
 
 instance FromHttpApiData CaptchaToken where
@@ -53,7 +118,8 @@ instance FromHttpApiData ForwardedFor where
   parseUrlPiece = Right . parseIpList . T.unpack
 
 -- errors not sent to users
-data FaucetError = FaucetErrorSocketNotFound
+data FaucetError
+  = FaucetErrorSocketNotFound
   | FaucetErrorLoadingKey (FileError InputDecodeError)
   | FaucetErrorParsingConfig String
   | FaucetErrorConfigFileNotSet
@@ -61,7 +127,7 @@ data FaucetError = FaucetErrorSocketNotFound
   | FaucetErrorBadIdx
   | FaucetErrorAddr AddressCmdError
   | FaucetErrorTodo2 Text
-  deriving Generic
+  deriving (Generic)
 
 renderFaucetError :: FaucetError -> Text
 renderFaucetError FaucetErrorSocketNotFound = "socket not found"
@@ -74,7 +140,8 @@ renderFaucetError (FaucetErrorAddr err) = docToText $ renderAddressCmdError err
 renderFaucetError (FaucetErrorTodo2 err) = show err
 
 -- errors that can be sent to the user
-data FaucetWebError = FaucetWebErrorInvalidAddress Text Text
+data FaucetWebError
+  = FaucetWebErrorInvalidAddress Text Text
   | FaucetWebErrorInvalidApiKey
   | FaucetWebErrorKeyCantDelegate
   | FaucetWebErrorRateLimitExeeeded NominalDiffTime Text
@@ -102,7 +169,8 @@ data ApiKey = Recaptcha Text | ApiKey Text deriving (Ord, Eq)
 -- the state of the entire faucet
 data FaucetState era = FaucetState
   { fsUtxoTMVar :: TMVar (Map TxIn (TxOut CtxUTxO era))
-  , fsStakeTMVar :: TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, L.Coin, PoolId)])
+  , fsStakeTMVar ::
+      TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, L.Coin, PoolId)])
   , fsNetwork :: NetworkId
   , fsTxQueue :: TQueue (TxInMode, ByteString)
   , fsRootKey :: Shelley 'RootK XPrv
@@ -116,16 +184,24 @@ data FaucetState era = FaucetState
   , fsOwnAddress :: AddressAny
   }
 
-data ScriptDataOrFile = ScriptDataCborFile  FilePath   -- ^ By reference to a CBOR file
-                      | ScriptDataJsonFile  FilePath   -- ^ By reference to a JSON file
-                      | ScriptDataValue     HashableScriptData -- ^ By value
+data ScriptDataOrFile
+  = -- | By reference to a CBOR file
+    ScriptDataCborFile FilePath
+  | -- | By reference to a JSON file
+    ScriptDataJsonFile FilePath
+  | -- | By value
+    ScriptDataValue HashableScriptData
   deriving (Eq, Show)
 
 -- the result of checking a rate limit
 data RateLimitResult = RateLimitResultAllow | RateLimitResultDeny NominalDiffTime
 
 -- the key for rate limits
-data RateLimitAddress = RateLimitAddressCardano AddressAny | RateLimitAddressNetwork IPv4 | RateLimitAddressPool PoolId deriving (Eq, Ord)
+data RateLimitAddress
+  = RateLimitAddressCardano AddressAny
+  | RateLimitAddressNetwork IPv4
+  | RateLimitAddressPool PoolId
+  deriving (Eq, Ord)
 
 -- send-money success reply
 data SendMoneySent = SendMoneySent
@@ -134,27 +210,33 @@ data SendMoneySent = SendMoneySent
   , amount :: FaucetValue
   }
 
-data StakeKeyIntermediateState = StakeKeyIntermediateStateNotRegistered Word32 | StakeKeyIntermediateStateRegistered (Word32, SigningKey StakeExtendedKey, StakeCredential, L.Coin)
+data StakeKeyIntermediateState
+  = StakeKeyIntermediateStateNotRegistered Word32
+  | StakeKeyIntermediateStateRegistered (Word32, SigningKey StakeExtendedKey, StakeCredential, L.Coin)
 
-data StakeKeyState = StakeKeyRegistered Word32 (SigningKey StakeExtendedKey) StakeCredential L.Coin
+data StakeKeyState
+  = StakeKeyRegistered Word32 (SigningKey StakeExtendedKey) StakeCredential L.Coin
   | StakeKeyDelegated Word32 L.Coin PoolId
-  | StakeKeyNotRegistered Word32 deriving Show
+  | StakeKeyNotRegistered Word32
+  deriving (Show)
 
 -- the full reply type for /send-money
-data SendMoneyReply = SendMoneyReplySuccess SendMoneySent
+data SendMoneyReply
+  = SendMoneyReplySuccess SendMoneySent
   | SendMoneyError FaucetWebError
 
 instance Aeson.ToJSON SendMoneyReply where
-  toJSON (SendMoneyReplySuccess (SendMoneySent{txid,txin,amount})) = Aeson.object [ "txid" .= txid, "txin" .= txin, "amount" .= amount ]
-  toJSON (SendMoneyError err) = Aeson.object [ "error" .= err ]
+  toJSON (SendMoneyReplySuccess (SendMoneySent {txid, txin, amount})) = Aeson.object ["txid" .= txid, "txin" .= txin, "amount" .= amount]
+  toJSON (SendMoneyError err) = Aeson.object ["error" .= err]
 
 -- the full reply type for /delegate
-data DelegationReply = DelegationReplySuccess TxId
+data DelegationReply
+  = DelegationReplySuccess TxId
   | DelegationReplyError FaucetWebError
 
 instance Aeson.ToJSON DelegationReply where
-  toJSON (DelegationReplySuccess txid) = Aeson.object [ "success" .= True, "txid" .= txid ]
-  toJSON (DelegationReplyError err) = Aeson.object [ "error" .= err ]
+  toJSON (DelegationReplySuccess txid) = Aeson.object ["success" .= True, "txid" .= txid]
+  toJSON (DelegationReplyError err) = Aeson.object ["error" .= err]
 
 -- a complete description of an api key
 data ApiKeyValue = ApiKeyValue
@@ -163,7 +245,8 @@ data ApiKeyValue = ApiKeyValue
   , akvRateLimit :: NominalDiffTime
   , akvTokens :: Maybe FaucetToken
   , akvCanDelegate :: Bool
-  } deriving (Generic, Show)
+  }
+  deriving (Generic, Show)
 
 instance Aeson.FromJSON ApiKeyValue where
   parseJSON = Aeson.withObject "ApiKeyValue" $ \v -> do
@@ -172,7 +255,7 @@ instance Aeson.FromJSON ApiKeyValue where
     akvRateLimit <- v .: "rate_limit"
     akvTokens <- v .:? "tokens"
     akvCanDelegate <- fromMaybe False <$> v .:? "delegate"
-    pure $ ApiKeyValue{..}
+    pure $ ApiKeyValue {..}
 
 -- the complete config file
 data FaucetConfigFile = FaucetConfigFile
@@ -187,14 +270,15 @@ data FaucetConfigFile = FaucetConfigFile
   , fcfRecaptchaSecretKey :: SecretKey
   , fcfAllowedCorsOrigins :: [Text]
   , fcfAddressIndex :: Word32
-  } deriving (Generic, Show)
+  }
+  deriving (Generic, Show)
 
 -- copied from bench/tx-generator/src/Cardano/TxGenerator/Internal/Orphans.hs
 instance Aeson.FromJSON NetworkId where
   parseJSON j = case j of
     Aeson.String "Mainnet" -> pure Mainnet
-    Aeson.Object v         -> v .:? "Testnet" >>= maybe failure (pure . Testnet . NetworkMagic)
-    _                -> failure
+    Aeson.Object v -> v .:? "Testnet" >>= maybe failure (pure . Testnet . NetworkMagic)
+    _ -> failure
     where
       failure = fail $ "could not parse NetworkId: " <> show j
 
@@ -202,7 +286,7 @@ instance Aeson.FromJSON FaucetConfigFile where
   parseJSON = Aeson.withObject "FaucetConfigFile" $ \o -> do
     fcfMnemonic <- o .: "mnemonic"
     apiKeyList <- o .: "api_keys"
-    let fcfApiKeys = Map.fromList $ map (\key@ApiKeyValue{akvApiKey} -> (akvApiKey, key)) apiKeyList
+    let fcfApiKeys = Map.fromList $ map (\key@ApiKeyValue {akvApiKey} -> (akvApiKey, key)) apiKeyList
     fcfRecaptchaLimits <- o .: "recaptcha_limits"
     fcfNetwork <- o .: "network"
     fcfMaxStakeKeyIndex <- o .: "max_stake_key_index"
@@ -212,24 +296,26 @@ instance Aeson.FromJSON FaucetConfigFile where
     fcfRecaptchaSecretKey <- SecretKey <$> o .: "recaptcha_secret_key"
     fcfAllowedCorsOrigins <- o .: "allowed_cors_origins"
     fcfAddressIndex <- fromMaybe 0 <$> o .:? "address_index"
-    pure FaucetConfigFile{..}
+    pure FaucetConfigFile {..}
 
 -- a value with only ada, or a value containing a mix of assets
 -- TODO, maybe replace with the cardano Value type?
-data FaucetValue = Ada L.Coin
+data FaucetValue
+  = Ada L.Coin
   | FaucetValueMultiAsset L.Coin FaucetToken
-  | FaucetValueManyTokens L.Coin deriving (Show, Eq, Ord)
+  | FaucetValueManyTokens L.Coin
+  deriving (Show, Eq, Ord)
 
---tokenToValue :: FaucetToken -> Value
---tokenToValue (FaucetToken (AssetId policyid token, q)) = object [ "policyid" .= policyid, "token" .= token, "quantity" .= q ]
---tokenToValue (FaucetToken (AdaAssetId, q)) = object [ "lovelace" .= q ]
+-- tokenToValue :: FaucetToken -> Value
+-- tokenToValue (FaucetToken (AssetId policyid token, q)) = object [ "policyid" .= policyid, "token" .= token, "quantity" .= q ]
+-- tokenToValue (FaucetToken (AdaAssetId, q)) = object [ "lovelace" .= q ]
 
 instance Aeson.ToJSON FaucetValue where
-  toJSON (Ada lovelace) = Aeson.object [ "lovelace" .= lovelace ]
+  toJSON (Ada lovelace) = Aeson.object ["lovelace" .= lovelace]
   toJSON (FaucetValueMultiAsset _ _) = Aeson.String "TODO"
   toJSON (FaucetValueManyTokens _) = Aeson.String "unsupported"
 
-data UtxoStats = UtxoStats (Map FaucetValue Int) deriving Show
+data UtxoStats = UtxoStats (Map FaucetValue Int) deriving (Show)
 
 -- a request to recaptcha
 data SiteVerifyRequest = SiteVerifyRequest
@@ -242,10 +328,11 @@ instance ToForm SiteVerifyRequest where
   toForm (SiteVerifyRequest (SecretKey secret) (CaptchaToken token) mRemoteIp) = fromEntriesByKey foo
     where
       foo :: [(Text, [Text])]
-      foo = [ ("secret", [secret]), ("response", [token]) ] ++ maybe [] (\x -> [("remoteip",[x])]) mRemoteIp
+      foo = [("secret", [secret]), ("response", [token])] ++ maybe [] (\x -> [("remoteip", [x])]) mRemoteIp
 
 -- a reply from recaptcha
-data SiteVerifyReply = SiteVerifyReply Text Text
+data SiteVerifyReply
+  = SiteVerifyReply Text Text
   | SiteVerifyError [Text]
   deriving (Generic, Show)
 
@@ -263,7 +350,8 @@ instance Aeson.FromJSON SiteVerifyReply where
         errors <- o .: "error-codes"
         pure $ SiteVerifyError errors
 
-data FaucetToken = FaucetToken (AssetId, Quantity) | FaucetMintToken (Word32, AssetName, Quantity) deriving (Show, Eq, Ord)
+data FaucetToken = FaucetToken (AssetId, Quantity) | FaucetMintToken (Word32, AssetName, Quantity)
+  deriving (Show, Eq, Ord)
 
 parseToken :: Aeson.Object -> Parser AssetName
 parseToken v = do
@@ -279,7 +367,7 @@ instance Aeson.FromJSON FaucetToken where
         policyid <- v .: "policy_id"
         quantity <- v .: "quantity"
         token <- parseToken v
-        pure $ FaucetToken (AssetId policyid token,quantity)
+        pure $ FaucetToken (AssetId policyid token, quantity)
       False -> do
         policy_index <- v .: "policy_index"
         token <- parseToken v
@@ -287,8 +375,8 @@ instance Aeson.FromJSON FaucetToken where
         pure $ FaucetMintToken (policy_index, token, quantity)
 
 instance Aeson.ToJSON FaucetToken where
-  toJSON (FaucetToken (AssetId policyid token, quant)) = Aeson.object [ "policy_id" .= policyid, "quantity" .= quant, "token" .= token ]
-  toJSON (FaucetToken (AdaAssetId, quant)) = Aeson.object [ "assetid" .= ("ada" :: Text), "quantity" .= quant ]
+  toJSON (FaucetToken (AssetId policyid token, quant)) = Aeson.object ["policy_id" .= policyid, "quantity" .= quant, "token" .= token]
+  toJSON (FaucetToken (AdaAssetId, quant)) = Aeson.object ["assetid" .= ("ada" :: Text), "quantity" .= quant]
   toJSON (FaucetMintToken (_policyid, _token, _quant)) = Aeson.String "TODO"
 
 parseConfig :: FilePath -> ExceptT FaucetError IO FaucetConfigFile
@@ -300,7 +388,9 @@ parseConfig path = do
 
 mnemonicToRootKey :: Monad m => [Text] -> ExceptT FaucetError m (Shelley 'RootK XPrv)
 mnemonicToRootKey mnemonic = do
-  mw <- either (left . FaucetErrorBadMnemonic . T.pack . getMkSomeMnemonicError) pure $ mkSomeMnemonic @'[24] mnemonic
+  mw <-
+    either (left . FaucetErrorBadMnemonic . T.pack . getMkSomeMnemonicError) pure
+      $ mkSomeMnemonic @'[24] mnemonic
   pure $ genMasterKeyFromMnemonic mw mempty
 
 convertHardenedIndex :: HasCallStack => Word32 -> Index 'Hardened depth
@@ -331,36 +421,36 @@ test = do
 
     let _addrK = accountKeyToPaymentKey acctK 0x14
     pure ()
-    {-
-    stakeK <- accountKeyToStakeKey acctK 0x1
-    let
-      x :: SigningKey StakeExtendedKey
-      x = StakeExtendedSigningKey $ getKey stakeK
-      foo' :: SigningKey PaymentExtendedKey
-      foo' = PaymentExtendedSigningKey $ getKey addrK
-      _foo :: SomeWitness
-      _foo = APaymentExtendedSigningKey foo'
-      a :: VerificationKey StakeExtendedKey
-      a = getVerificationKey x
-      b :: Hash StakeKey
-      b = verificationKeyHash $ castVerificationKey a
-      c :: StakeCredential
-      c = StakeCredentialByKey b
-      e :: Either String PoolId
-      e = eitherDecode "\"pool1mjhwg36auxnd37mcfqlc647w92hdedejj5jalvckaxsw68tjjxw\""
-      d :: PoolId
-      d = fromRight (error "todo") e
-      f :: Certificate
-      f = makeStakeAddressDelegationCertificate c d
-    print b
-    print c
-    print e
-    print f
-    addr <- paymentKeyToAddress foo' $ fcfNetwork config
-    print $ serialiseAddress addr
-    pure $ getVerificationKey foo'
-    -}
-    -- addr_test1vq4p02j5rf5w69kldld0t9wt6fe2efvfhcxsk4qdhwm2pnglr5yaj
+  {-
+  stakeK <- accountKeyToStakeKey acctK 0x1
+  let
+    x :: SigningKey StakeExtendedKey
+    x = StakeExtendedSigningKey $ getKey stakeK
+    foo' :: SigningKey PaymentExtendedKey
+    foo' = PaymentExtendedSigningKey $ getKey addrK
+    _foo :: SomeWitness
+    _foo = APaymentExtendedSigningKey foo'
+    a :: VerificationKey StakeExtendedKey
+    a = getVerificationKey x
+    b :: Hash StakeKey
+    b = verificationKeyHash $ castVerificationKey a
+    c :: StakeCredential
+    c = StakeCredentialByKey b
+    e :: Either String PoolId
+    e = eitherDecode "\"pool1mjhwg36auxnd37mcfqlc647w92hdedejj5jalvckaxsw68tjjxw\""
+    d :: PoolId
+    d = fromRight (error "todo") e
+    f :: Certificate
+    f = makeStakeAddressDelegationCertificate c d
+  print b
+  print c
+  print e
+  print f
+  addr <- paymentKeyToAddress foo' $ fcfNetwork config
+  print $ serialiseAddress addr
+  pure $ getVerificationKey foo'
+  -}
+  -- addr_test1vq4p02j5rf5w69kldld0t9wt6fe2efvfhcxsk4qdhwm2pnglr5yaj
   case eResult of
     Left err -> print $ renderFaucetError err
     Right msg -> print msg
