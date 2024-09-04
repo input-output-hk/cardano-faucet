@@ -1,7 +1,3 @@
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module Cardano.Faucet.TxUtils where
 
 import Cardano.Api (ShelleyBasedEra, TxIn, TxOut(TxOut), CtxUTxO, TxBody, TxBodyContent(TxBodyContent), Witness(KeyWitness), KeyWitnessInCtx(KeyWitnessForSpending), TxInsCollateral(TxInsCollateralNone), TxInsReference(TxInsReferenceNone), TxTotalCollateral(TxTotalCollateralNone), TxReturnCollateral(TxReturnCollateralNone), TxMetadataInEra(TxMetadataNone), TxAuxScripts(TxAuxScriptsNone), TxExtraKeyWitnesses(TxExtraKeyWitnessesNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates, BuildTxWith(BuildTxWith), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(..), TxScriptValidity(TxScriptValidityNone), defaultTxValidityUpperBound, docToText, Tx, makeShelleyKeyWitness, makeSignedTransaction, TxId, getTxId, BuildTx, ShelleyWitnessSigningKey, AddressAny, TxValidityLowerBound (TxValidityNoLowerBound))
@@ -18,7 +14,7 @@ import Cardano.CLI.Types.Errors.TxCmdError
 
 getMintedValue :: TxMintValue BuildTx era -> Value
 getMintedValue (TxMintValue _ val _) = val
-getMintedValue (TxMintNone) = mempty
+getMintedValue TxMintNone = mempty
 
 newtype Fee = Fee L.Coin
 
@@ -42,7 +38,7 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
     mintedValue = getMintedValue minting
     -- TODO, add minted tokens
     changeValue :: Value
-    changeValue = (lovelaceToValue change) <> mintedValue
+    changeValue = lovelaceToValue change <> mintedValue
 
     getTxOuts :: Either AddressAny [TxOutAnyEra] -> [TxOutAnyEra]
     getTxOuts (Left addr) = [ TxOutAnyEra addr changeValue TxOutDatumByNone ReferenceScriptAnyEraNone ]

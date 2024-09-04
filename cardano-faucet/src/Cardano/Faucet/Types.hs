@@ -2,7 +2,6 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -47,7 +46,7 @@ instance FromHttpApiData CaptchaToken where
 newtype ForwardedFor = ForwardedFor [IPv4] deriving (Eq, Show)
 
 parseIpList :: Prelude.String -> ForwardedFor
-parseIpList input = ForwardedFor $ reverse $ map (Prelude.read) (splitOn "," input)
+parseIpList input = ForwardedFor $ reverse $ map Prelude.read (splitOn "," input)
 
 instance FromHttpApiData ForwardedFor where
   parseHeader = Right . parseIpList . BSC.unpack
@@ -65,13 +64,13 @@ data FaucetError = FaucetErrorSocketNotFound
   deriving Generic
 
 renderFaucetError :: FaucetError -> Text
-renderFaucetError (FaucetErrorSocketNotFound) = "socket not found"
+renderFaucetError FaucetErrorSocketNotFound = "socket not found"
 renderFaucetError (FaucetErrorLoadingKey err) = show err
 renderFaucetError (FaucetErrorParsingConfig err) = show err
 renderFaucetError FaucetErrorConfigFileNotSet = "$CONFIG_FILE not set"
 renderFaucetError (FaucetErrorBadMnemonic msg) = "bad mnemonic " <> msg
 renderFaucetError FaucetErrorBadIdx = "bad index"
-renderFaucetError (FaucetErrorAddr err) = docToText $ renderAddressCmdError $ err
+renderFaucetError (FaucetErrorAddr err) = docToText $ renderAddressCmdError err
 renderFaucetError (FaucetErrorTodo2 err) = show err
 
 -- errors that can be sent to the user
