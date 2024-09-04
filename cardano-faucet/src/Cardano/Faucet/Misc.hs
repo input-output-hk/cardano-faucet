@@ -46,7 +46,7 @@ faucetValueToLovelace (FaucetValueManyTokens ll) = ll
 
 parseAddress :: Text -> ExceptT FaucetWebError IO AddressAny
 parseAddress addr = case parse (parseAddressAny <* eof) "" (T.unpack addr) of
-  Right a -> return $ a
+  Right a -> return a
   Left e -> left $ FaucetWebErrorInvalidAddress addr (show e)
 
 defaultCModeParams :: ConsensusModeParams

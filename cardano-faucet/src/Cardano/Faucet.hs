@@ -7,8 +7,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TupleSections #-}
 
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
@@ -69,17 +67,17 @@ startApiServer :: ()
   -> IO ()
 startApiServer era faucetState port = do
   let
-    settings = setTimeout 600 $ setPort port $ defaultSettings
+    settings = setTimeout 600 $ setPort port defaultSettings
   index_path <- getDataFileName "index.html"
   print index_path
   index_html <- readFile index_path
   runSettings settings (app era faucetState index_html)
 
 findAllSizes :: FaucetConfigFile -> [FaucetValue]
-findAllSizes FaucetConfigFile{fcfRecaptchaLimits,fcfApiKeys} = uniq $ values
+findAllSizes FaucetConfigFile{fcfRecaptchaLimits,fcfApiKeys} = uniq values
   where
     values :: [FaucetValue]
-    values = map toFaucetValue $ (Map.elems fcfApiKeys) ++ (Map.elems fcfRecaptchaLimits)
+    values = map toFaucetValue $ Map.elems fcfApiKeys ++ Map.elems fcfRecaptchaLimits
 
 deriveSingleKey :: NetworkId -> Shelley 'AccountK XPrv -> Word32 -> (SigningKey StakeExtendedKey, StakeCredential, StakeAddress)
 deriveSingleKey net acctK stakeIndex = (stake_skey, y, x)
@@ -161,7 +159,7 @@ sortStakeKeys (registeredStakeKeys, delegatedStakeKeys) manyStakeKeys = do
 
     finalMerge :: Map StakeAddress StakeKeyState
     finalMerge = Map.merge
-      (mapMissing $ onlyRegistered)
+      (mapMissing onlyRegistered)
       dropMissing
       (zipWithMaybeAMatched registeredAndDelegated)
       intermediateMerge
@@ -266,7 +264,7 @@ queryStakeKeyLoop era network manyStakeKeys debug faucetState initial = do
 queryClient :: FaucetConfigFile -> TQueue (TxInMode, ByteString) -> Port -> Net.Query.LocalStateQueryClient BlockInMode ChainPoint QueryInMode IO ()
 queryClient config txQueue port = LocalStateQueryClient $ do
   aquireConnection $ do
-    runQueryThen (QueryCurrentEra) $ \(AnyCardanoEra era) -> do
+    runQueryThen QueryCurrentEra $ \(AnyCardanoEra era) -> do
       case cardanoEraToShelleyBasedEra era of
         Left err -> Prelude.error $ Text.unpack err
         Right sbe -> do
@@ -309,7 +307,7 @@ txMonitor FaucetConfigFile{fcfDebug} = LocalTxMonitorClient $ return $ CTxMon.Se
     getNextTx :: Show tx => Maybe tx -> IO (CTxMon.ClientStAcquired txid1 TxInMode SlotNo IO a1)
     getNextTx (Just tx) = do
       when fcfDebug $ do
-        putStrLn $ format ("found tx in snapshot: " % sh) $ tx
+        putStrLn $ format ("found tx in snapshot: " % sh) tx
       return $ CTxMon.SendMsgNextTx getNextTx
     getNextTx Nothing = do
       return $ CTxMon.SendMsgAwaitAcquire getSnapshot
@@ -319,7 +317,7 @@ readEnvSocketPath = do
     mEnvName <- lookupEnv envName
     case mEnvName of
       Just sPath -> return $ Right sPath
-      Nothing -> return . Left $ (Text.pack envName)
+      Nothing -> return . Left $ Text.pack envName
   where
     envName :: Prelude.String
     envName = "CARDANO_NODE_SOCKET_PATH"
@@ -335,10 +333,10 @@ main = do
     mportString <- liftIO $ lookupEnv "PORT"
     let
       portString = maybe "8090" Prelude.id mportString
-      port = Prelude.read $ portString
+      port = Prelude.read portString
     bar <- unmaybe configFilePath
     fsConfig <- parseConfig bar
-    Right sockPath <- liftIO $ readEnvSocketPath
+    Right sockPath <- liftIO readEnvSocketPath
     let
       localNodeConnInfo :: LocalNodeConnectInfo
       localNodeConnInfo = LocalNodeConnectInfo defaultCModeParams (fcfNetwork fsConfig) (File sockPath)
