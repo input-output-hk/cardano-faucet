@@ -301,12 +301,12 @@ submissionClient dryRun txQueue = Net.Tx.LocalTxSubmissionClient waitForTxAndLoo
     waitForTxAndLoop :: IO (Net.Tx.LocalTxClientStIdle TxInMode reject IO a)
     waitForTxAndLoop = do
       (tx, prettyTx) <- atomically $ readTQueue txQueue
-      case dryRun of
-        True -> do
+      if dryRun
+        then do
           putStrLn @Text "dry-run, not sending the following tx:"
           putStrLn prettyTx
           waitForTxAndLoop
-        False -> pure $ Net.Tx.SendMsgSubmitTx tx $ \_result -> do
+        else pure $ Net.Tx.SendMsgSubmitTx tx $ \_result -> do
           -- print result
           waitForTxAndLoop
 
@@ -361,15 +361,15 @@ queryStakeKeyLoop era network manyStakeKeys debug faucetState initial = do
   runQueryThen (queryManyStakeAddr era network stakeCredentials) $ \case
     Right stakeKeyResults -> do
       let (notRegistered, notDelegated, delegated) = sortStakeKeys stakeKeyResults manyStakeKeys
-      case debug of
-        True -> do
+      if debug
+        then do
           putStrLn $ format ("these stake key indexes are not registered: " % sh) notRegistered
           putStrLn
             $ format ("these stake keys are registered and ready for use: " % sh)
             $ sort
             $ map (\(index, _skey, _vkey) -> index) notDelegated
           putStrLn $ format ("these stake keys are delegated: " % sh) $ sort delegated
-        False -> do
+        else do
           when initial
             $ putStrLn
             $ format
@@ -464,7 +464,7 @@ main = do
     configFilePath <- liftIO $ lookupEnv "CONFIG_FILE"
     mportString <- liftIO $ lookupEnv "PORT"
     let
-      portString = maybe "8090" Prelude.id mportString
+      portString = fromMaybe "8090" mportString
       port = Prelude.read portString
     bar <- unmaybe configFilePath
     fsConfig <- parseConfig bar

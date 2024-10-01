@@ -102,20 +102,25 @@ type SendMoneyUrl =
     :> Capture "destination_address" Text
     :> QueryParam' '[Optional] "type" Text
     :> ApiKeyProtected (Post '[JSON] (Headers '[Header "Access-Control-Allow-Origin" Text] SendMoneyReply))
+
 type SendMoneyQuery =
   "send-money"
     :> QueryParam' '[Required] "address" Text
     :> QueryParam' '[Optional] "type" Text
     :> ApiKeyProtected (Get '[JSON] (Headers '[Header "Access-Control-Allow-Origin" Text] SendMoneyReply))
+
 type Metrics = "metrics" :> Get '[PlainText] Text
+
 type DelegateStakeUrl =
   "delegate"
     :> Capture "poolid" PoolId
     :> ApiKeyProtected (Get '[JSON] (Headers '[Header "Access-Control-Allow-Origin" Text] DelegationReply))
+
 type DelegateStakeQuery =
   "delegate"
     :> QueryParam' '[Required] "poolid" PoolId
     :> ApiKeyProtected (Get '[JSON] (Headers '[Header "Access-Control-Allow-Origin" Text] DelegationReply))
+
 type MintCoins =
   "mint-many"
     :> QueryParam' '[Required] "address" Text
@@ -123,13 +128,16 @@ type MintCoins =
     :> QueryParam' '[Required] "output_count" Integer
     :> QueryParam' '[Required] "tokens_per_utxo" Integer
     :> Get '[JSON] (Either FaucetWebError ())
+
 type SiteVerify =
   "recaptcha"
     :> "api"
     :> "siteverify"
     :> ReqBody '[FormUrlEncoded] SiteVerifyRequest
     :> Post '[JSON] SiteVerifyReply
+
 type GetSiteKey = "get-site-key" :> Get '[PlainText] Text
+
 type GetBasicFaucet = "basic-faucet" :> Get '[HTML] Text
 
 -- faucet root dir
@@ -205,9 +213,7 @@ getCorsReply ::
   [Text] -> Maybe Text -> (a -> Headers '[Header "Access-Control-Allow-Origin" Text] a)
 getCorsReply whitelist mOrigin = case mOrigin of
   Nothing -> noHeader
-  (Just origin) -> case origin `elem` whitelist of
-    True -> addHeader origin
-    False -> noHeader
+  (Just origin) -> if origin `elem` whitelist then addHeader origin else noHeader
 
 handleMintCoins ::
   ShelleyBasedEra era ->
@@ -362,7 +368,7 @@ mintFreshTokens sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsOwnAddress} po
           input_sum = mconcat [txoutToValue txout, valueToMint]
           change = input_sum <> output_sum
           -- prepend the change if there is any
-          outputsWithChange = if change == mempty then outputs else (to_txout fsOwnAddress change) : outputs
+          outputsWithChange = if change == mempty then outputs else to_txout fsOwnAddress change : outputs
         putStrLn $ format ("outputValue: " % sh) outputValue
         putStrLn $ format ("output_sum: " % sh) output_sum
         putStrLn $ format ("input_sum: " % sh) input_sum
@@ -411,7 +417,7 @@ handleDelegateStake
     let
       clientIP = pickIp mForwardedFor remoteip
     eResult <- liftIO $ runExceptT $ do
-      when (fcfMaxStakeKeyIndex fsConfig == Nothing) $ left $ FaucetWebErrorTodo "delegation disabled"
+      when (isNothing (fcfMaxStakeKeyIndex fsConfig)) $ left $ FaucetWebErrorTodo "delegation disabled"
       mReply <- liftIO $ decideBetweenKeyAndCaptcha Nothing mApiKey mToken fsConfig
       (key, limits) <- case mReply of
         Just (_, ApiKeyValue _ _ _ _ False) -> left FaucetWebErrorKeyCantDelegate
@@ -713,7 +719,7 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
     let
       feeLovelace = L.Coin 200_000
       txInValue = txoutToValue txout
-      valueUserShouldReceive = txInValue <> mintedValue <> (negateValue $ lovelaceToValue feeLovelace)
+      valueUserShouldReceive = txInValue <> mintedValue <> negateValue (lovelaceToValue feeLovelace)
       outputs :: [TxOutAnyEra]
       outputs = [TxOutAnyEra addressAny valueUserShouldReceive TxOutDatumByNone ReferenceScriptAnyEraNone]
     (signedTx, txid) <-
