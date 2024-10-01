@@ -88,7 +88,7 @@ import Data.Aeson.KeyMap (member)
 import Data.Aeson.Types (Parser)
 import Data.ByteString.Char8 qualified as BSC
 import Data.Either.Combinators (mapRight)
-import Data.IP (IPv4)
+import Data.IP (IP (..), IPv6, ipv4ToIPv6)
 import Data.List.Split (splitOn)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
@@ -108,10 +108,15 @@ instance FromHttpApiData CaptchaToken where
   parseQueryParam t = mapRight CaptchaToken (parseQueryParam t)
 
 -- the X-Forwarded-For header
-newtype ForwardedFor = ForwardedFor [IPv4] deriving (Eq, Show)
+newtype ForwardedFor = ForwardedFor [IPv6] deriving (Eq, Show)
+
+parseIp :: IP -> IPv6
+parseIp (IPv4 ip) = ipv4ToIPv6 ip
+parseIp (IPv6 ip) = ip
 
 parseIpList :: Prelude.String -> ForwardedFor
-parseIpList input = ForwardedFor $ reverse $ map Prelude.read (splitOn "," input)
+parseIpList input =
+  ForwardedFor $ reverse $ map (\addr -> parseIp (Prelude.read addr :: IP)) (splitOn "," input)
 
 instance FromHttpApiData ForwardedFor where
   parseHeader = Right . parseIpList . BSC.unpack
@@ -199,7 +204,7 @@ data RateLimitResult = RateLimitResultAllow | RateLimitResultDeny NominalDiffTim
 -- the key for rate limits
 data RateLimitAddress
   = RateLimitAddressCardano AddressAny
-  | RateLimitAddressNetwork IPv4
+  | RateLimitAddressNetwork IPv6
   | RateLimitAddressPool PoolId
   deriving (Eq, Ord)
 

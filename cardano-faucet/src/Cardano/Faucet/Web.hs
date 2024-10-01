@@ -53,7 +53,7 @@ import Cardano.Prelude hiding ((%))
 import Control.Concurrent.STM (TMVar, putTMVar, readTMVar, takeTMVar, writeTQueue)
 import Data.Aeson (eitherDecode)
 import Data.ByteString.Lazy qualified as LBS
-import Data.IP (IPv4, fromHostAddress)
+import Data.IP (IPv6, fromHostAddress, ipv4ToIPv6)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as LT
@@ -627,16 +627,16 @@ handleMetrics FaucetState {fsUtxoTMVar, fsBucketSizes, fsConfig, fsStakeTMVar} =
           )
           stakeUsed
       utxoMetrics :: [Metric]
-      utxoMetrics = Map.foldlWithKey (\rows value count -> (toStats value count) : rows) [] (stats <> missingUtxo)
+      utxoMetrics = Map.foldlWithKey (\rows value count -> toStats value count : rows) [] (stats <> missingUtxo)
       metrics :: [Metric]
       metrics = utxoMetrics <> [stakeUnusedToMetric, stakeUsedToMetric] <> stakeRewardsMetric
       result = Cardano.Prelude.unlines $ Cardano.Prelude.map toMetric metrics
     pure result
 
-pickIp :: Maybe ForwardedFor -> SockAddr -> IPv4
+pickIp :: Maybe ForwardedFor -> SockAddr -> IPv6
 pickIp (Just (ForwardedFor (a : _))) _ = a
-pickIp _ (SockAddrInet _port hostaddr) = fromHostAddress hostaddr
-pickIp _ _ = fromHostAddress 0x100_007f -- 127.0.0.1
+pickIp _ (SockAddrInet _port hostaddr) = ipv4ToIPv6 $ fromHostAddress hostaddr
+pickIp _ _ = ipv4ToIPv6 $ fromHostAddress 0x100_007f -- 127.0.0.1, little-endian arch
 
 -- if a valid api key is given, return that key and its limits
 -- if the apikey is invalid, act like it didnt exist
@@ -744,7 +744,7 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
       liftIO $ logError clientIP err
       pure $ corsHeader $ SendMoneyError err
 
-logError :: IPv4 -> FaucetWebError -> IO ()
+logError :: IPv6 -> FaucetWebError -> IO ()
 logError ip (FaucetWebErrorRateLimitExeeeded secs addr) =
   putStrLn $
     format (sh % ": rate limit exeeded for " % t % " will reset in " % sh) ip (LT.fromStrict addr) secs
