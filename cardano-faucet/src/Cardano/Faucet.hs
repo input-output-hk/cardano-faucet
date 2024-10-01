@@ -130,7 +130,8 @@ startApiServer ::
   IO ()
 startApiServer era faucetState port = do
   let
-    settings = setTimeout 600 $ setPort port defaultSettings
+    -- Bind both ipv4 and ipv6
+    settings = setTimeout 600 $ setHost "*6" $ setPort port defaultSettings
   index_path <- getDataFileName "index.html"
   print index_path
   index_html <- readFile index_path
