@@ -457,7 +457,7 @@ handleDelegateStake
                 sbe
             cert = makeStakeAddressDelegationCertificate requirements
             stake_witness = WitnessStakeExtendedKey stake_skey
-            x = BuildTxWith $ Map.fromList [(creds, KeyWitness KeyWitnessForStakeAddr)]
+            x = BuildTxWith [(creds, KeyWitness KeyWitnessForStakeAddr)]
           (signedTx, txid) <-
             makeAndSignTx
               sbe
