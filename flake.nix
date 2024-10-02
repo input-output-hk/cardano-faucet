@@ -24,7 +24,7 @@
     {inherit (inputs) incl;}
     // inputs.flake-utils.lib.eachSystem supportedSystems (
       system: let
-        # setup our nixpkgs with the haskell.nix overlays, and the iohk-nix
+        # Setup our nixpkgs with the haskell.nix overlays, and the iohk-nix
         # overlays...
         nixpkgs = import inputs.nixpkgs {
           overlays = [
@@ -40,7 +40,7 @@
         };
         inherit (nixpkgs) lib;
 
-        # see flake `variants` below for alternative compilers
+        # See flake `variants` below for alternative compilers
         defaultCompiler = "ghc966";
         # We use cabalProject' to ensure we don't build the plan for
         # all systems.
@@ -49,10 +49,11 @@
           name = "cardano-faucet";
           compiler-nix-name = lib.mkDefault defaultCompiler;
 
-          # we also want cross compilation to windows on linux (and only with default compiler).
-          crossPlatforms = p:
-            lib.optional (system == "x86_64-linux" && config.compiler-nix-name == defaultCompiler)
-            p.mingwW64;
+          # We also want cross compilation to windows on linux (and only with default compiler).
+          # TODO: re-enable cross once mingw32 build isn't missing attribute `alex` at the latest haskellNix pin
+          # crossPlatforms = p:
+          #   lib.optional (system == "x86_64-linux" && config.compiler-nix-name == defaultCompiler)
+          #   p.mingwW64;
 
           # CHaP input map, so we can find CHaP packages (needs to be more
           # recent than the index-state we set!). Can be updated with
