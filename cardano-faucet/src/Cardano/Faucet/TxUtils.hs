@@ -52,7 +52,6 @@ getMintedValue TxMintNone = mempty
 newtype Fee = Fee L.Coin
 
 txBuild ::
-  () =>
   ShelleyBasedEra era ->
   (TxIn, TxOut CtxUTxO era) ->
   Either AddressAny [TxOutAnyEra] ->
@@ -152,7 +151,6 @@ return balancedTxBody
 -}
 
 txSign ::
-  () =>
   ShelleyBasedEra era ->
   TxBody era ->
   [ShelleyWitnessSigningKey] ->
@@ -165,7 +163,6 @@ txSign era txBody sks = tx
     tx = makeSignedTransaction shelleyKeyWitnesses txBody
 
 makeAndSignTx ::
-  () =>
   ShelleyBasedEra era ->
   (TxIn, TxOut CtxUTxO era) ->
   Either AddressAny [TxOutAnyEra] ->

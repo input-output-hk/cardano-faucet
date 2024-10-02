@@ -171,7 +171,6 @@ doSiteVerify secret token = do
     (mkClientEnv manager' (BaseUrl Https "www.google.com" 443 ""))
 
 server ::
-  () =>
   ShelleyBasedEra era ->
   FaucetState era ->
   Text ->
@@ -330,7 +329,6 @@ getOptionalMintOutput sbe fs (FaucetValueMultiAsset _ (FaucetMintToken (policy_i
 getOptionalMintOutput _ _ _ = pure (mempty, TxMintNone, [])
 
 mintFreshTokens ::
-  () =>
   ShelleyBasedEra era ->
   FaucetState era ->
   Word32 ->
@@ -387,7 +385,6 @@ mintFreshTokens sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsOwnAddress} po
     sbe
 
 handleDelegateStake ::
-  () =>
   ShelleyBasedEra era ->
   FaucetState era ->
   PoolId ->
@@ -669,7 +666,6 @@ decideBetweenKeyAndCaptcha mType Nothing (Just token) FaucetConfigFile {fcfRecap
 decideBetweenKeyAndCaptcha _ Nothing Nothing _ = pure Nothing
 
 handleSendMoney ::
-  () =>
   ShelleyBasedEra era ->
   FaucetState era ->
   Text ->

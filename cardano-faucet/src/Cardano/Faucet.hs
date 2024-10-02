@@ -115,7 +115,6 @@ writeTMVar :: TMVar a -> a -> STM ()
 writeTMVar tmvar new = tryTakeTMVar tmvar >> putTMVar tmvar new
 
 app ::
-  () =>
   ShelleyBasedEra era ->
   FaucetState era ->
   Text ->
@@ -123,7 +122,6 @@ app ::
 app era faucetState indexHtml = serve userAPI $ server era faucetState indexHtml
 
 startApiServer ::
-  () =>
   ShelleyBasedEra era ->
   FaucetState era ->
   Port ->
