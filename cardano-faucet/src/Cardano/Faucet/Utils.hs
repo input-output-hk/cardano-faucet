@@ -88,7 +88,6 @@ findUtxoOfSize utxoTMVar value = do
     Nothing -> throwSTM $ FaucetWebErrorUtxoNotFound value
 
 validateTxFee ::
-  () =>
   ShelleyBasedEra era ->
   Maybe L.Coin ->
   ExceptT FaucetWebError IO (TxFee era)
@@ -98,7 +97,6 @@ validateTxFee sbe mfee =
     Just fee -> return $ TxFeeExplicit sbe fee
 
 txFeatureMismatch ::
-  () =>
   ShelleyBasedEra era ->
   ExceptT FaucetWebError IO a
 txFeatureMismatch sbe =
@@ -113,7 +111,6 @@ noBoundsIfSupported ::
 noBoundsIfSupported sbe = (TxValidityNoLowerBound, defaultTxValidityUpperBound sbe)
 
 prettyFriendlyTx ::
-  () =>
   ShelleyBasedEra era ->
   Tx era ->
   BS.ByteString
