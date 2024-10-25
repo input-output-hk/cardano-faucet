@@ -60,7 +60,7 @@ import Cardano.Api.Shelley (
   makeStakeAddress,
   verificationKeyHash,
  )
-import Cardano.CLI.EraBased.Run.Address (buildShelleyAddress)
+import Cardano.CLI.Run.Address (buildShelleyAddress)
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types (
   FaucetConfigFile (..),
