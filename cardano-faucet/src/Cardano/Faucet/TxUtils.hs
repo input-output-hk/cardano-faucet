@@ -23,6 +23,7 @@ import Cardano.Api (
   TxOut (TxOut),
   TxReturnCollateral (TxReturnCollateralNone),
   TxScriptValidity (TxScriptValidityNone),
+  TxSupplementalDatums (..),
   TxTotalCollateral (TxTotalCollateralNone),
   TxUpdateProposal (TxUpdateProposalNone),
   TxValidityLowerBound (TxValidityNoLowerBound),
@@ -92,6 +93,7 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
       <*> pure (defaultTxValidityUpperBound sbe)
       <*> pure TxMetadataNone
       <*> pure TxAuxScriptsNone
+      <*> pure (BuildTxWith TxSupplementalDataNone)
       <*> pure TxExtraKeyWitnessesNone
       <*> pure (BuildTxWith Nothing)
       <*> pure TxWithdrawalsNone
