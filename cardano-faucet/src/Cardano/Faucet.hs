@@ -41,7 +41,9 @@ import Cardano.Api (
   TxInMode,
   UTxO (unUTxO),
   connectToLocalNode,
+  docToText,
   getVerificationKey,
+  prettyException,
   serialiseAddress,
  )
 import Cardano.Api.Byron ()
@@ -60,7 +62,8 @@ import Cardano.Api.Shelley (
   makeStakeAddress,
   verificationKeyHash,
  )
-import Cardano.CLI.Run.Address (buildShelleyAddress)
+import Cardano.CLI.Compatible.Exception (CIO, CustomCliException (..))
+import Cardano.CLI.EraIndependent.Address.Run (buildShelleyAddress)
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types (
   FaucetConfigFile (..),
@@ -105,6 +108,7 @@ import Ouroboros.Network.Protocol.LocalTxMonitor.Client qualified as CTxMon
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client qualified as Net.Tx
 import Paths_cardano_faucet (getDataFileName)
 import Protolude (print, readFile)
+import RIO (runRIO)
 import Servant
 import System.Environment (lookupEnv)
 import System.IO (BufferMode (LineBuffering), hSetBuffering)
@@ -330,12 +334,22 @@ newFaucetState fsConfig fsTxQueue = do
     fsPaymentVkey = pay_vkey
     fsBucketSizes = findAllSizes fsConfig
     fsNetwork = fcfNetwork fsConfig
-  fsOwnAddress <-
-    withExceptT FaucetErrorAddr
-      $ AddressShelley
-      <$> buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork
+
+  fsOwnAddress <- 
+    AddressShelley <$>
+    runInCIO () (buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork)
+
   pure $ FaucetState {..}
 
+runInCIO :: env -> CIO env action -> ExceptT FaucetError IO action
+runInCIO env action = 
+  ExceptT $ 
+    fmap Right (runRIO env action) 
+      `catch` \(e :: CustomCliException) -> pure $ Left (asFaucetError e)
+
+  where
+    asFaucetError = FaucetErrorTodo2 . docToText . prettyException
+    
 finish :: IO (Net.Query.ClientStAcquired block point query IO ())
 finish = do
   void . forever $ threadDelay 43200 {- day in seconds -}

@@ -40,14 +40,12 @@
         };
         inherit (nixpkgs) lib;
 
-        # See flake `variants` below for alternative compilers
-        defaultCompiler = "ghc966";
         # We use cabalProject' to ensure we don't build the plan for
         # all systems.
         cabalProject = nixpkgs.haskell-nix.cabalProject' ({config, ...}: {
           src = ./.;
           name = "cardano-faucet";
-          compiler-nix-name = lib.mkDefault defaultCompiler;
+          compiler-nix-name = lib.mkDefault "ghc96";
 
           # We also want cross compilation to windows on linux (and only with default compiler).
           # TODO: re-enable cross once mingw32 build isn't missing attribute `alex` at the latest haskellNix pin
@@ -66,20 +64,18 @@
           # tools we want in our shell, from hackage
           shell.tools =
             {
-              cabal = "3.10.3.0";
-              ghcid = "0.8.9";
-            }
-            // lib.optionalAttrs (config.compiler-nix-name == defaultCompiler) {
-              # tools that work only with default compiler
+              cabal = "3.12.1.0";
               fourmolu = "0.14.0.0";
-              haskell-language-server.src = nixpkgs.haskell-nix.sources."hls-2.9";
+              ghcid = "0.8.9";
+              haskell-language-server.src = nixpkgs.haskell-nix.sources."hls-2.12";
               hlint = "3.8";
+              # TODO[sgillespie]: Why do we need fourmolu and stylish-haskell?
               stylish-haskell = "0.14.6.0";
             };
           # and from nixpkgs or other inputs
           shell.nativeBuildInputs = with nixpkgs; [ gh jq yq-go ];
           # disable Hoogle until someone request it
-          shell.withHoogle = false;
+          shell.withHoogle = true;
           # Skip cross compilers for the shell
           shell.crossPlatforms = _: [];
 
@@ -135,14 +131,7 @@
           ];
         });
         # ... and construct a flake from the cabal project
-        flake = cabalProject.flake (
-          lib.optionalAttrs (system == "x86_64-linux") {
-            # on linux, build/test other supported compilers
-            variants = lib.genAttrs ["ghc8107"] (compiler-nix-name: {
-              inherit compiler-nix-name;
-            });
-          }
-        );
+        flake = cabalProject.flake {};
       in
         lib.recursiveUpdate flake rec {
           project = cabalProject;

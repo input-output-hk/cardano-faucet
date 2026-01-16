@@ -23,7 +23,6 @@ import Cardano.Api (
   TxOut (TxOut),
   TxReturnCollateral (TxReturnCollateralNone),
   TxScriptValidity (TxScriptValidityNone),
-  TxSupplementalDatums (..),
   TxTotalCollateral (TxTotalCollateralNone),
   TxUpdateProposal (TxUpdateProposalNone),
   TxValidityLowerBound (TxValidityNoLowerBound),
@@ -33,22 +32,18 @@ import Cardano.Api (
   docToText,
   getTxId,
   makeShelleyKeyWitness,
-  makeSignedTransaction,
+  makeSignedTransaction, txMintValueToValue,
  )
 import qualified Cardano.Api.Ledger as L
 import Cardano.Api.Shelley (Value, createAndValidateTransactionBody, lovelaceToValue)
-import Cardano.CLI.EraBased.Run.Transaction
-import Cardano.CLI.Types.Common
-import Cardano.CLI.Types.Errors.TxCmdError
+import Cardano.CLI.EraBased.Transaction.Run
+import Cardano.CLI.Type.Common
+import Cardano.CLI.Type.Error.TxCmdError
 import Cardano.Faucet.Misc (faucetValueToLovelace, getValue)
 import Cardano.Faucet.Types (FaucetValue, FaucetWebError (..))
 import Cardano.Faucet.Utils
 import Cardano.Prelude hiding ((%))
 import Control.Monad.Trans.Except.Extra (left)
-
-getMintedValue :: TxMintValue BuildTx era -> Value
-getMintedValue (TxMintValue _ val _) = val
-getMintedValue TxMintNone = mempty
 
 newtype Fee = Fee L.Coin
 
@@ -69,7 +64,7 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
     value = faucetValueToLovelace $ unwrap txout
     change :: L.Coin
     change = value - fixedFee
-    mintedValue = getMintedValue minting
+    mintedValue = txMintValueToValue minting
     -- TODO, add minted tokens
     changeValue :: Value
     changeValue = lovelaceToValue change <> mintedValue
@@ -93,7 +88,6 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
       <*> pure (defaultTxValidityUpperBound sbe)
       <*> pure TxMetadataNone
       <*> pure TxAuxScriptsNone
-      <*> pure (BuildTxWith TxSupplementalDataNone)
       <*> pure TxExtraKeyWitnessesNone
       <*> pure (BuildTxWith Nothing)
       <*> pure TxWithdrawalsNone

@@ -24,13 +24,15 @@ import Cardano.Api (
 import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Shelley (ShelleyBasedEra (..))
 import Cardano.CLI.Json.Friendly qualified as CLI
-import Cardano.CLI.Types.MonadWarning qualified as CLI
+import Cardano.CLI.Type.MonadWarning qualified as CLI
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types
 import Cardano.Prelude hiding ((%))
 import Control.Concurrent.STM (TMVar, putTMVar, takeTMVar)
 import Control.Monad.Trans.Except.Extra (left)
+import Data.Aeson.Encode.Pretty qualified as Aeson
 import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as LBS
 import Data.Map.Strict qualified as Map
 import Prelude qualified
 
@@ -115,10 +117,11 @@ prettyFriendlyTx ::
   Tx era ->
   BS.ByteString
 prettyFriendlyTx sbe tx =
-  CLI.friendlyBS CLI.FriendlyJson prettyTxAeson
+  BS.concat . LBS.toChunks $ Aeson.encodePretty' jsonConfig prettyTxAeson
   where
     era = toCardanoEra sbe
     prettyTxAeson = fst $ runState (CLI.runWarningStateT $ CLI.friendlyTxImpl era tx) []
+    jsonConfig = Aeson.defConfig{Aeson.confCompare = compare}
 
 -- | @cardanoEraToShelleyBasedEra@ converts a 'CardanoEra' to a 'ShelleyBasedEra'
 -- or returns an error message if the era is not Shelley based.

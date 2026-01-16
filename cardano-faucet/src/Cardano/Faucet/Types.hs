@@ -77,7 +77,7 @@ import Cardano.Api.Shelley (
   StakeCredential,
   StakeExtendedKey,
  )
-import Cardano.CLI.Types.Errors.AddressCmdError
+import Cardano.CLI.Type.Error.AddressCmdError
 import Cardano.Mnemonic (getMkSomeMnemonicError, mkSomeMnemonic)
 import Cardano.Prelude
 import Control.Concurrent.STM (TMVar, TQueue)
