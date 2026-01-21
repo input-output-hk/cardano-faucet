@@ -29,21 +29,20 @@ import Cardano.Api (
   TxWithdrawals (TxWithdrawalsNone),
   Witness (KeyWitness),
   defaultTxValidityUpperBound,
-  docToText,
   getTxId,
   makeShelleyKeyWitness,
   makeSignedTransaction, txMintValueToValue,
  )
 import qualified Cardano.Api.Ledger as L
-import Cardano.Api.Shelley (Value, createAndValidateTransactionBody, lovelaceToValue)
-import Cardano.CLI.EraBased.Transaction.Run
+import Cardano.Api.Tx (createAndValidateTransactionBody)
+import Cardano.Api.Value (Value, lovelaceToValue)
 import Cardano.CLI.Type.Common
-import Cardano.CLI.Type.Error.TxCmdError
 import Cardano.Faucet.Misc (faucetValueToLovelace, getValue)
 import Cardano.Faucet.Types (FaucetValue, FaucetWebError (..))
 import Cardano.Faucet.Utils
 import Cardano.Prelude hiding ((%))
 import Control.Monad.Trans.Except.Extra (left)
+import Cardano.CLI.Compatible.Transaction.TxOut (toTxOutInAnyEra)
 
 newtype Fee = Fee L.Coin
 
@@ -79,7 +78,7 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
       <*> pure TxInsCollateralNone
       <*> pure TxInsReferenceNone
       <*> mapM
-        (\x -> withExceptT (FaucetWebErrorTodo . docToText . renderTxCmdError) $ toTxOutInAnyEra sbe x)
+        (\x -> withExceptT FaucetWebErrorTodo $ runInCIO () $ toTxOutInAnyEra sbe x)
         (getTxOuts addressOrOutputs)
       <*> pure TxTotalCollateralNone
       <*> pure TxReturnCollateralNone

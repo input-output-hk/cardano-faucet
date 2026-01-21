@@ -1,4 +1,5 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE GADTs #-}
 
 module Cardano.Faucet.Misc where
 
@@ -14,11 +15,10 @@ import Cardano.Api (
   valueToList,
  )
 import Cardano.Api.Ledger qualified as L
-import Cardano.Api.Shelley (AssetId (AssetId), selectLovelace)
+import Cardano.Api.Value (AssetId (AssetId), selectLovelace)
 import Cardano.Faucet.Types
 import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (left)
-import Data.Text qualified as T
 import Text.Parsec
 
 getValue :: TxOutValue era -> FaucetValue
@@ -55,7 +55,7 @@ faucetValueToLovelace (FaucetValueMultiAsset ll _token) = ll
 faucetValueToLovelace (FaucetValueManyTokens ll) = ll
 
 parseAddress :: Text -> ExceptT FaucetWebError IO AddressAny
-parseAddress addr = case parse (parseAddressAny <* eof) "" (T.unpack addr) of
+parseAddress addr = case parse (parseAddressAny <* eof) "" addr of
   Right a -> return a
   Left e -> left $ FaucetWebErrorInvalidAddress addr (show e)
 

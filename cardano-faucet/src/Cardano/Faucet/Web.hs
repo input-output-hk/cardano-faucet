@@ -18,11 +18,6 @@ import Cardano.Address.Derivation (Depth (PolicyK), XPrv)
 import Cardano.Address.Style.Shelley (Shelley, getKey)
 import Cardano.Api
 import Cardano.Api.Ledger qualified as L
-import Cardano.Api.Shelley (
-  Hash (unStakePoolKeyHash),
-  PoolId,
-  SimpleScriptOrReferenceInput (SScript),
- )
 import Cardano.CLI.Type.Common
 import Cardano.Faucet.Misc (faucetValueToLovelace, parseAddress, stripMintingTokens, toFaucetValue)
 import Cardano.Faucet.TxUtils (Fee (..), makeAndSignTx)
@@ -233,7 +228,7 @@ handleMintCoins era fs@FaucetState {fsTxQueue} addr fee output_count tokens_per_
         fs
         0
         addressAny
-        (AssetName "Testtoken")
+        (UnsafeAssetName "Testtoken")
         tokens_per_utxo
         output_count
         (Fee $ L.Coin fee)
@@ -608,7 +603,7 @@ handleMetrics FaucetState {fsUtxoTMVar, fsBucketSizes, fsConfig, fsStakeTMVar} =
         where
           L.Coin l = faucetValueToLovelace fv
       tokenAttributes :: FaucetToken -> [Maybe (Text, MetricValue)]
-      tokenAttributes (FaucetToken (AssetId (PolicyId scripthash) (AssetName _tokenname), _quant)) =
+      tokenAttributes (FaucetToken (AssetId (PolicyId scripthash) (UnsafeAssetName _tokenname), _quant)) =
         [ Just ("policyid", MetricValueStr $ serialiseToRawBytesHexText scripthash)
         -- has escaping issues, T_1\n breaks prometheus
         -- , Just ("tokenname", MetricValueStr $ T.decodeLatin1 tokenname)

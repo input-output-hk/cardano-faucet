@@ -3,6 +3,8 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Faucet.Utils where
 
@@ -19,11 +21,12 @@ import Cardano.Api (
   TxValidityUpperBound,
   defaultTxValidityUpperBound,
   shelleyBasedEraConstraints,
-  toCardanoEra,
+  toCardanoEra, docToText, prettyException,
  )
 import Cardano.Api.Ledger qualified as L
-import Cardano.Api.Shelley (ShelleyBasedEra (..))
-import Cardano.CLI.Json.Friendly qualified as CLI
+import Cardano.Api.Era (ShelleyBasedEra (..))
+import Cardano.CLI.Compatible.Exception (CIO, CustomCliException)
+import Cardano.CLI.Compatible.Json.Friendly qualified as CLI
 import Cardano.CLI.Type.MonadWarning qualified as CLI
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types
@@ -35,6 +38,7 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
 import Data.Map.Strict qualified as Map
 import Prelude qualified
+import RIO (runRIO)
 
 computeUtxoStats :: Map TxIn (TxOut CtxUTxO era) -> UtxoStats
 computeUtxoStats utxo = do
@@ -119,8 +123,7 @@ prettyFriendlyTx ::
 prettyFriendlyTx sbe tx =
   BS.concat . LBS.toChunks $ Aeson.encodePretty' jsonConfig prettyTxAeson
   where
-    era = toCardanoEra sbe
-    prettyTxAeson = fst $ runState (CLI.runWarningStateT $ CLI.friendlyTxImpl era tx) []
+    prettyTxAeson = fst $ runState (CLI.runWarningStateT $ CLI.friendlyTxImpl sbe tx) []
     jsonConfig = Aeson.defConfig{Aeson.confCompare = compare}
 
 -- | @cardanoEraToShelleyBasedEra@ converts a 'CardanoEra' to a 'ShelleyBasedEra'
@@ -134,3 +137,13 @@ cardanoEraToShelleyBasedEra = \case
   AlonzoEra -> Right ShelleyBasedEraAlonzo
   BabbageEra -> Right ShelleyBasedEraBabbage
   ConwayEra -> Right ShelleyBasedEraConway
+  DijkstraEra -> Right ShelleyBasedEraDijkstra
+
+runInCIO :: env -> CIO env action -> ExceptT Text IO action
+runInCIO env action = 
+  ExceptT $ 
+    fmap Right (runRIO env action) 
+      `catch` \(e :: CustomCliException) -> pure $ Left (asFaucetError e)
+
+  where
+    asFaucetError = docToText . prettyException
