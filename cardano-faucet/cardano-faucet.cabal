@@ -1,7 +1,7 @@
 cabal-version: 3.0
 
 name:                   cardano-faucet
-version:                10.1
+version:                10.6
 description:            The Cardano command-line interface.
 author:                 IOHK
 maintainer:             operations@iohk.io
@@ -58,11 +58,12 @@ library
                         Cardano.Faucet.Web
                         Paths_cardano_faucet
 
-  build-depends:        aeson              >= 1.5.6.0
+  build-depends:        aeson              >= 2
+                      , aeson-pretty
                       , MissingH
                       , bytestring
-                      , cardano-addresses ^>= 3.12.0
-                      , cardano-api       ^>= 10.1.0.0
+                      , cardano-addresses  >= 4
+                      , cardano-api       ^>= 10.19
                       , cardano-cli
                       , cardano-prelude
                       , containers
@@ -77,6 +78,7 @@ library
                       , ouroboros-network-protocols
                       , parsec
                       , protolude
+                      , rio
                       , servant-client
                       , servant-server
                       , split

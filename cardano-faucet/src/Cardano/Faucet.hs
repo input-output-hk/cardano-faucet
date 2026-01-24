@@ -47,20 +47,22 @@ import Cardano.Api (
 import Cardano.Api.Byron ()
 import Cardano.Api.Ledger qualified as L
 
-import Cardano.Api.Shelley (
-  LocalTxMonitorClient (..),
-  NetworkId,
-  PoolId,
+import Cardano.Api.Network.IPC (LocalTxMonitorClient (..))
+import Cardano.Api.Network (NetworkId)
+import Cardano.Api.Certificate (PoolId)
+import Cardano.Api.Key (
   SigningKey (StakeExtendedSigningKey),
-  SlotNo,
-  StakeAddress,
-  StakeCredential (StakeCredentialByKey),
   StakeExtendedKey,
   castVerificationKey,
-  makeStakeAddress,
   verificationKeyHash,
  )
-import Cardano.CLI.Run.Address (buildShelleyAddress)
+import Cardano.Api.Block (SlotNo)
+import Cardano.Api.Address (
+  StakeAddress,
+  StakeCredential (StakeCredentialByKey),
+  makeStakeAddress,
+ )
+import Cardano.CLI.EraIndependent.Address.Run (buildShelleyAddress)
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types (
   FaucetConfigFile (..),
@@ -330,10 +332,14 @@ newFaucetState fsConfig fsTxQueue = do
     fsPaymentVkey = pay_vkey
     fsBucketSizes = findAllSizes fsConfig
     fsNetwork = fcfNetwork fsConfig
-  fsOwnAddress <-
-    withExceptT FaucetErrorAddr
-      $ AddressShelley
-      <$> buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork
+
+  shelleyAddress <- 
+    withExceptT FaucetErrorTodo2 $
+      runInCIO () $ 
+          buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork
+
+  let fsOwnAddress = AddressShelley shelleyAddress
+
   pure $ FaucetState {..}
 
 finish :: IO (Net.Query.ClientStAcquired block point query IO ())

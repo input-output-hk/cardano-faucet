@@ -68,16 +68,12 @@ import Cardano.Api (
   docToText,
  )
 import Cardano.Api.Ledger qualified as L
-import Cardano.Api.Shelley (
-  AssetName (..),
-  NetworkId (Mainnet, Testnet),
-  NetworkMagic (NetworkMagic),
-  PoolId,
-  ShelleyWitnessSigningKey,
-  StakeCredential,
-  StakeExtendedKey,
- )
-import Cardano.CLI.Types.Errors.AddressCmdError
+import Cardano.Api.Address (StakeCredential, StakeExtendedKey)
+import Cardano.Api.Certificate (PoolId)
+import Cardano.Api.Network (NetworkId (Mainnet, Testnet), NetworkMagic (NetworkMagic))
+import Cardano.Api.Tx (ShelleyWitnessSigningKey)
+import Cardano.Api.Value (AssetName (..))
+import Cardano.CLI.Type.Error.AddressCmdError
 import Cardano.Mnemonic (getMkSomeMnemonicError, mkSomeMnemonic)
 import Cardano.Prelude
 import Control.Concurrent.STM (TMVar, TQueue)
@@ -362,7 +358,7 @@ parseToken :: Aeson.Object -> Parser AssetName
 parseToken v = do
   mToken <- v .:? "token"
   case mToken of
-    Just t -> pure $ AssetName $ encodeUtf8 t
+    Just t -> pure $ UnsafeAssetName $ encodeUtf8 t
     Nothing -> v .: "tokenHex"
 
 instance Aeson.FromJSON FaucetToken where

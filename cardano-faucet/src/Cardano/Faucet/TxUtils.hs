@@ -23,32 +23,26 @@ import Cardano.Api (
   TxOut (TxOut),
   TxReturnCollateral (TxReturnCollateralNone),
   TxScriptValidity (TxScriptValidityNone),
-  TxSupplementalDatums (..),
   TxTotalCollateral (TxTotalCollateralNone),
   TxUpdateProposal (TxUpdateProposalNone),
   TxValidityLowerBound (TxValidityNoLowerBound),
   TxWithdrawals (TxWithdrawalsNone),
   Witness (KeyWitness),
   defaultTxValidityUpperBound,
-  docToText,
   getTxId,
   makeShelleyKeyWitness,
-  makeSignedTransaction,
+  makeSignedTransaction, txMintValueToValue,
  )
 import qualified Cardano.Api.Ledger as L
-import Cardano.Api.Shelley (Value, createAndValidateTransactionBody, lovelaceToValue)
-import Cardano.CLI.EraBased.Run.Transaction
-import Cardano.CLI.Types.Common
-import Cardano.CLI.Types.Errors.TxCmdError
+import Cardano.Api.Tx (createAndValidateTransactionBody)
+import Cardano.Api.Value (Value, lovelaceToValue)
+import Cardano.CLI.Type.Common
 import Cardano.Faucet.Misc (faucetValueToLovelace, getValue)
 import Cardano.Faucet.Types (FaucetValue, FaucetWebError (..))
 import Cardano.Faucet.Utils
 import Cardano.Prelude hiding ((%))
 import Control.Monad.Trans.Except.Extra (left)
-
-getMintedValue :: TxMintValue BuildTx era -> Value
-getMintedValue (TxMintValue _ val _) = val
-getMintedValue TxMintNone = mempty
+import Cardano.CLI.Compatible.Transaction.TxOut (toTxOutInAnyEra)
 
 newtype Fee = Fee L.Coin
 
@@ -69,7 +63,7 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
     value = faucetValueToLovelace $ unwrap txout
     change :: L.Coin
     change = value - fixedFee
-    mintedValue = getMintedValue minting
+    mintedValue = txMintValueToValue minting
     -- TODO, add minted tokens
     changeValue :: Value
     changeValue = lovelaceToValue change <> mintedValue
@@ -84,7 +78,7 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
       <*> pure TxInsCollateralNone
       <*> pure TxInsReferenceNone
       <*> mapM
-        (\x -> withExceptT (FaucetWebErrorTodo . docToText . renderTxCmdError) $ toTxOutInAnyEra sbe x)
+        (\x -> withExceptT FaucetWebErrorTodo $ runInCIO () $ toTxOutInAnyEra sbe x)
         (getTxOuts addressOrOutputs)
       <*> pure TxTotalCollateralNone
       <*> pure TxReturnCollateralNone
@@ -93,7 +87,6 @@ txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
       <*> pure (defaultTxValidityUpperBound sbe)
       <*> pure TxMetadataNone
       <*> pure TxAuxScriptsNone
-      <*> pure (BuildTxWith TxSupplementalDataNone)
       <*> pure TxExtraKeyWitnessesNone
       <*> pure (BuildTxWith Nothing)
       <*> pure TxWithdrawalsNone

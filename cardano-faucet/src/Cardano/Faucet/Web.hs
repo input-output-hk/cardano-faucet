@@ -18,12 +18,7 @@ import Cardano.Address.Derivation (Depth (PolicyK), XPrv)
 import Cardano.Address.Style.Shelley (Shelley, getKey)
 import Cardano.Api
 import Cardano.Api.Ledger qualified as L
-import Cardano.Api.Shelley (
-  Hash (unStakePoolKeyHash),
-  PoolId,
-  SimpleScriptOrReferenceInput (SScript),
- )
-import Cardano.CLI.Types.Common
+import Cardano.CLI.Type.Common
 import Cardano.Faucet.Misc (faucetValueToLovelace, parseAddress, stripMintingTokens, toFaucetValue)
 import Cardano.Faucet.TxUtils (Fee (..), makeAndSignTx)
 import Cardano.Faucet.Types (
@@ -75,6 +70,7 @@ import Servant.Client (
   mkClientEnv,
   runClientM,
  )
+import GHC.Exts (IsList(..))
 
 -- create recaptcha api keys at https://www.google.com/recaptcha/admin
 -- reCAPTCHA v2, "i am not a robot"
@@ -232,7 +228,7 @@ handleMintCoins era fs@FaucetState {fsTxQueue} addr fee output_count tokens_per_
         fs
         0
         addressAny
-        (AssetName "Testtoken")
+        (UnsafeAssetName "Testtoken")
         tokens_per_utxo
         output_count
         (Fee $ L.Coin fee)
@@ -314,16 +310,27 @@ getOptionalMintOutput sbe fs (FaucetValueMultiAsset _ (FaucetMintToken (policy_i
   caseShelleyToAllegraOrMaryEraOnwards
     (\_ -> left $ FaucetWebErrorTodo "era earlier than mary not supported")
     ( \maryOnwards -> do
-        let
         languageSupportedInEra <- case scriptLanguageSupportedInEra sbe SimpleScriptLanguage of
           Just yes -> pure yes
           Nothing -> left $ FaucetWebErrorTodo "scripts not supported"
+
         let
           TokenState {tsAssetId, tsPolicyId, tsSimpleScript, tsPolicySKey} = getTokenState policy_index name fs
+
+        assetName <- case tsAssetId of
+            AdaAssetId -> left $ FaucetWebErrorTodo "Not a multi asset"
+            AssetId _ assetName -> pure assetName
+
+        let
+          assets = PolicyAssets $ Map.fromList [(assetName, quant)]
+          witnessProvided = BuildTxWith $ SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript)
           valueToMint = valueFromList [(tsAssetId, quant)]
-          witnessesProvidedMap = Map.fromList [(tsPolicyId, SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript))]
-          y = BuildTxWith witnessesProvidedMap
-        pure (valueToMint, TxMintValue maryOnwards valueToMint y, [WitnessPaymentExtendedKey tsPolicySKey])
+
+        pure 
+          (valueToMint
+          , TxMintValue maryOnwards (Map.fromList [(tsPolicyId, (assets, witnessProvided))])
+          , [WitnessPaymentExtendedKey tsPolicySKey]
+          )
     )
     sbe
 getOptionalMintOutput _ _ _ = pure (mempty, TxMintNone, [])
@@ -349,10 +356,15 @@ mintFreshTokens sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsOwnAddress} po
         languageSupportedInEra <- case scriptLanguageSupportedInEra sbe SimpleScriptLanguage of
           Just yes -> pure yes
           Nothing -> left $ FaucetWebErrorTodo "scripts not supported"
+        assetName <- case tsAssetId of
+            AdaAssetId -> left $ FaucetWebErrorTodo "Not a multi asset"
+            AssetId _ assetName -> pure assetName
         let
-          valueToMint = valueFromList [(tsAssetId, Quantity $ count * tx_out_count)]
-          witnessesProvidedMap = Map.fromList [(tsPolicyId, SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript))]
-          mint = TxMintValue supported valueToMint $ BuildTxWith witnessesProvidedMap
+          quant = Quantity (count * tx_out_count)
+          witnessProvided = BuildTxWith $ SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript)
+          valueToMint = valueFromList [(tsAssetId, quant)]
+          assets = PolicyAssets $ Map.fromList [(assetName, quant)]
+          mint = TxMintValue supported (Map.fromList [(tsPolicyId, (assets, witnessProvided))])
           -- value in each utxo being created
           outputValue = valueFromList [(AdaAssetId, Quantity 10_000_000), (tsAssetId, Quantity count)]
           outputValues = replicate (fromIntegral tx_out_count) outputValue
@@ -446,7 +458,7 @@ handleDelegateStake
         Left err -> left err
         Right ((stake_skey, creds), txinout) -> do
           let
-            poolKeyHash :: L.KeyHash 'L.StakePool L.StandardCrypto = unStakePoolKeyHash poolId
+            poolKeyHash :: L.KeyHash 'L.StakePool = unStakePoolKeyHash poolId
             requirements =
               caseShelleyToBabbageOrConwayEraOnwards
                 (\shelleyToBabbage -> StakeDelegationRequirementsPreConway shelleyToBabbage creds poolId)
@@ -454,14 +466,14 @@ handleDelegateStake
                 sbe
             cert = makeStakeAddressDelegationCertificate requirements
             stake_witness = WitnessStakeExtendedKey stake_skey
-            x = BuildTxWith [(creds, KeyWitness KeyWitnessForStakeAddr)]
+            x = BuildTxWith $ Just (creds, KeyWitness KeyWitnessForStakeAddr)
           (signedTx, txid) <-
             makeAndSignTx
               sbe
               txinout
               (Left fsOwnAddress)
               [fsPaymentSkey, stake_witness]
-              (TxCertificates sbe [cert] x)
+              (TxCertificates sbe $ fromList [(cert, x)])
               TxMintNone
               (Fee $ L.Coin 200_000)
           let
@@ -591,7 +603,7 @@ handleMetrics FaucetState {fsUtxoTMVar, fsBucketSizes, fsConfig, fsStakeTMVar} =
         where
           L.Coin l = faucetValueToLovelace fv
       tokenAttributes :: FaucetToken -> [Maybe (Text, MetricValue)]
-      tokenAttributes (FaucetToken (AssetId (PolicyId scripthash) (AssetName _tokenname), _quant)) =
+      tokenAttributes (FaucetToken (AssetId (PolicyId scripthash) (UnsafeAssetName _tokenname), _quant)) =
         [ Just ("policyid", MetricValueStr $ serialiseToRawBytesHexText scripthash)
         -- has escaping issues, T_1\n breaks prometheus
         -- , Just ("tokenname", MetricValueStr $ T.decodeLatin1 tokenname)
