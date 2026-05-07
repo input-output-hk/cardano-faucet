@@ -75,7 +75,8 @@
           # and from nixpkgs or other inputs
           shell.nativeBuildInputs = with nixpkgs; [ gh jq yq-go ];
           # disable Hoogle until someone request it
-          shell.withHoogle = true;
+          # Disabled: GHC 9.6.7 haddock panics on ouroboros-network-1.1.0.0 BigLedgerPeers
+          shell.withHoogle = false;
           # Skip cross compilers for the shell
           shell.crossPlatforms = _: [];
 

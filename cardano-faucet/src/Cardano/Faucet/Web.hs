@@ -17,6 +17,7 @@ module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest (..)) where
 import Cardano.Address.Derivation (Depth (PolicyK), XPrv)
 import Cardano.Address.Style.Shelley (Shelley, getKey)
 import Cardano.Api
+import Cardano.Api.Experimental.Certificate qualified as ExpCert
 import Cardano.Api.Ledger qualified as L
 import Cardano.CLI.Type.Common
 import Cardano.Faucet.Misc (faucetValueToLovelace, parseAddress, stripMintingTokens, toFaucetValue)
@@ -70,7 +71,7 @@ import Servant.Client (
   mkClientEnv,
   runClientM,
  )
-import GHC.Exts (IsList(..))
+import GHC.Exts ()
 
 -- create recaptcha api keys at https://www.google.com/recaptcha/admin
 -- reCAPTCHA v2, "i am not a robot"
@@ -458,22 +459,23 @@ handleDelegateStake
         Left err -> left err
         Right ((stake_skey, creds), txinout) -> do
           let
-            poolKeyHash :: L.KeyHash 'L.StakePool = unStakePoolKeyHash poolId
-            requirements =
-              caseShelleyToBabbageOrConwayEraOnwards
-                (\shelleyToBabbage -> StakeDelegationRequirementsPreConway shelleyToBabbage creds poolId)
-                (\cOnwards -> StakeDelegationRequirementsConwayOnwards cOnwards creds (L.DelegStake poolKeyHash))
+            poolKeyHash :: L.KeyHash L.StakePool = unStakePoolKeyHash poolId
+            expCert = caseShelleyToBabbageOrConwayEraOnwards
+                (\_ ->
+                  let ledgerCert = L.mkDelegStakeTxCert (toShelleyStakeCredential creds) (unStakePoolKeyHash poolId)
+                  in ExpCert.Certificate ledgerCert)
+                (\_ ->
+                  let ledgerCert = L.mkDelegTxCert (toShelleyStakeCredential creds) (L.DelegStake poolKeyHash)
+                  in ExpCert.Certificate ledgerCert)
                 sbe
-            cert = makeStakeAddressDelegationCertificate requirements
             stake_witness = WitnessStakeExtendedKey stake_skey
-            x = BuildTxWith $ Just (creds, KeyWitness KeyWitnessForStakeAddr)
           (signedTx, txid) <-
             makeAndSignTx
               sbe
               txinout
               (Left fsOwnAddress)
               [fsPaymentSkey, stake_witness]
-              (TxCertificates sbe $ fromList [(cert, x)])
+              (mkTxCertificates sbe [(expCert, Nothing)])
               TxMintNone
               (Fee $ L.Coin 200_000)
           let
