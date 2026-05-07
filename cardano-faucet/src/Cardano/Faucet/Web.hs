@@ -71,7 +71,6 @@ import Servant.Client (
   mkClientEnv,
   runClientM,
  )
-import GHC.Exts ()
 
 -- create recaptcha api keys at https://www.google.com/recaptcha/admin
 -- reCAPTCHA v2, "i am not a robot"
