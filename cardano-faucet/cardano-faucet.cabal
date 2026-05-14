@@ -1,7 +1,7 @@
 cabal-version: 3.0
 
 name:                   cardano-faucet
-version:                10.6
+version:                10.7
 description:            The Cardano command-line interface.
 author:                 IOHK
 maintainer:             operations@iohk.io
@@ -63,7 +63,7 @@ library
                       , MissingH
                       , bytestring
                       , cardano-addresses  >= 4
-                      , cardano-api       ^>= 10.19
+                      , cardano-api       ^>= 10.26
                       , cardano-cli
                       , cardano-prelude
                       , containers
@@ -74,8 +74,8 @@ library
                       , http-media
                       , iproute
                       , network
-                      , ouroboros-consensus
-                      , ouroboros-network-protocols
+                      , ouroboros-consensus:{ouroboros-consensus}
+                      , ouroboros-network:{protocols}
                       , parsec
                       , protolude
                       , rio

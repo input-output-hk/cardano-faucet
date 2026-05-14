@@ -13,8 +13,8 @@ repository cardano-haskell-packages
 -- See CONTRIBUTING for information about these, including some Nix commands
 -- you need to run if you change them
 index-state:
-  , hackage.haskell.org 2026-01-15T00:29:38Z
-  , cardano-haskell-packages 2026-01-09T12:04:47Z
+  , hackage.haskell.org 2026-03-26T20:21:33Z
+  , cardano-haskell-packages 2026-04-14T21:25:56Z
 
 packages:
   cardano-faucet
@@ -24,7 +24,12 @@ allow-newer:
   monoidal-containers:aeson,
   size-based:template-haskell,
   attoparsec,
-  text
+  text,
+  io-sim:time,
+  io-classes:time
+
+constraints:
+  , any.crypton-x509-system < 1.6.8
 
 test-show-details: direct
 
