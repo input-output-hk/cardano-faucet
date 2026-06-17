@@ -47,8 +47,12 @@ import Cardano.Api (
 import Cardano.Api.Byron ()
 import Cardano.Api.Ledger qualified as L
 
-import Cardano.Api.Network.IPC (LocalTxMonitorClient (..))
-import Cardano.Api.Network (NetworkId)
+import Cardano.Api.Address (
+  StakeAddress,
+  StakeCredential (StakeCredentialByKey),
+  makeStakeAddress,
+ )
+import Cardano.Api.Block (SlotNo)
 import Cardano.Api.Certificate (PoolId)
 import Cardano.Api.Key (
   SigningKey (StakeExtendedSigningKey),
@@ -56,12 +60,8 @@ import Cardano.Api.Key (
   castVerificationKey,
   verificationKeyHash,
  )
-import Cardano.Api.Block (SlotNo)
-import Cardano.Api.Address (
-  StakeAddress,
-  StakeCredential (StakeCredentialByKey),
-  makeStakeAddress,
- )
+import Cardano.Api.Network (NetworkId)
+import Cardano.Api.Network.IPC (LocalTxMonitorClient (..))
 import Cardano.CLI.EraIndependent.Address.Run (buildShelleyAddress)
 import Cardano.Faucet.Misc
 import Cardano.Faucet.Types (
@@ -306,9 +306,13 @@ submissionClient dryRun txQueue = Net.Tx.LocalTxSubmissionClient waitForTxAndLoo
           putStrLn @Text "dry-run, not sending the following tx:"
           putStrLn prettyTx
           waitForTxAndLoop
-        else pure $ Net.Tx.SendMsgSubmitTx tx $ \_result -> do
-          -- print result
-          waitForTxAndLoop
+        else pure $ Net.Tx.SendMsgSubmitTx tx $ \case
+          Net.Tx.SubmitSuccess -> do
+            putStrLn @Text "tx submitted successfully"
+            waitForTxAndLoop
+          Net.Tx.SubmitFail _reason -> do
+            putStrLn @Text "tx submission FAILED"
+            waitForTxAndLoop
 
 queryManyStakeAddr ::
   ShelleyBasedEra era ->
@@ -333,10 +337,10 @@ newFaucetState fsConfig fsTxQueue = do
     fsBucketSizes = findAllSizes fsConfig
     fsNetwork = fcfNetwork fsConfig
 
-  shelleyAddress <- 
-    withExceptT FaucetErrorTodo2 $
-      runInCIO () $ 
-          buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork
+  shelleyAddress <-
+    withExceptT FaucetErrorTodo2
+      $ runInCIO ()
+      $ buildShelleyAddress (castVerificationKey pay_vkey) Nothing fsNetwork
 
   let fsOwnAddress = AddressShelley shelleyAddress
 
