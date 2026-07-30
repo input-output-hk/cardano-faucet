@@ -1,40 +1,35 @@
+{-# LANGUAGE GADTs #-}
+
 module Cardano.Faucet.TxUtils where
 
 import Cardano.Api (
   AddressAny,
-  BuildTx,
-  BuildTxWith (BuildTxWith),
   CtxUTxO,
-  KeyWitnessInCtx (KeyWitnessForSpending),
+  PolicyAssets,
+  PolicyId,
   ShelleyBasedEra,
+  ShelleyLedgerEra,
   ShelleyWitnessSigningKey,
-  Tx,
-  TxAuxScripts (TxAuxScriptsNone),
-  TxBody,
-  TxBodyContent (TxBodyContent),
-  TxCertificates,
-  TxExtraKeyWitnesses (TxExtraKeyWitnessesNone),
+  Tx (ShelleyTx),
   TxId,
   TxIn,
-  TxInsCollateral (TxInsCollateralNone),
-  TxInsReference (TxInsReferenceNone),
-  TxMetadataInEra (TxMetadataNone),
-  TxMintValue (..),
   TxOut (TxOut),
-  TxReturnCollateral (TxReturnCollateralNone),
-  TxScriptValidity (TxScriptValidityNone),
-  TxTotalCollateral (TxTotalCollateralNone),
-  TxUpdateProposal (TxUpdateProposalNone),
-  TxValidityLowerBound (TxValidityNoLowerBound),
-  TxWithdrawals (TxWithdrawalsNone),
-  Witness (KeyWitness),
-  defaultTxValidityUpperBound,
+  getTxBody,
   getTxId,
-  makeShelleyKeyWitness,
-  makeSignedTransaction, txMintValueToValue,
  )
 import qualified Cardano.Api.Ledger as L
-import Cardano.Api.Tx (createAndValidateTransactionBody)
+import Cardano.Api.Experimental (
+  Era,
+  LedgerEra,
+  SimpleScriptOrReferenceInput (SScript),
+  deserialiseSimpleScript,
+  obtainCommonConstraints,
+  sbeToEra,
+ )
+import Cardano.Api.Experimental.AnyScriptWitness (AnyScriptWitness (AnyScriptWitnessSimple))
+import qualified Cardano.Api.Experimental.Certificate as ExpCert
+import qualified Cardano.Api.Experimental.Tx as Exp
+import qualified Data.Map.Strict as Map
 import Cardano.Api.Value (Value, lovelaceToValue)
 import Cardano.CLI.Type.Common
 import Cardano.Faucet.Misc (faucetValueToLovelace, getValue)
@@ -48,60 +43,66 @@ newtype Fee = Fee L.Coin
 
 txBuild ::
   ShelleyBasedEra era ->
+  Era era ->
   (TxIn, TxOut CtxUTxO era) ->
   Either AddressAny [TxOutAnyEra] ->
-  TxCertificates BuildTx era ->
-  TxMintValue BuildTx era ->
+  [(ExpCert.Certificate (ShelleyLedgerEra era), Exp.AnyWitness (ShelleyLedgerEra era))] ->
+  [(PolicyId, PolicyAssets, ByteString)] ->
   Fee ->
-  ExceptT FaucetWebError IO (TxBody era)
-txBuild sbe (txin, txout) addressOrOutputs certs minting (Fee fixedFee) = do
+  ExceptT FaucetWebError IO (Exp.UnsignedTx (LedgerEra era))
+txBuild sbe expEra (txin, txout) addressOrOutputs certList mintEntries (Fee fixedFee) = do
   let
-    -- localNodeConnInfo = LocalNodeConnectInfo cModeParams networkId sockPath
     unwrap :: TxOut ctx1 era1 -> FaucetValue
     unwrap (TxOut _ val _ _) = getValue val
     value :: L.Coin
     value = faucetValueToLovelace $ unwrap txout
     change :: L.Coin
     change = value - fixedFee
-    mintedValue = txMintValueToValue minting
-    -- TODO, add minted tokens
     changeValue :: Value
-    changeValue = lovelaceToValue change <> mintedValue
+    changeValue = lovelaceToValue change
 
     getTxOuts :: Either AddressAny [TxOutAnyEra] -> [TxOutAnyEra]
     getTxOuts (Left addr) = [TxOutAnyEra addr changeValue TxOutDatumByNone ReferenceScriptAnyEraNone]
     getTxOuts (Right outs) = outs
 
-  txBodyContent <-
-    TxBodyContent
-      <$> pure [(txin, BuildTxWith $ KeyWitness KeyWitnessForSpending)]
-      <*> pure TxInsCollateralNone
-      <*> pure TxInsReferenceNone
-      <*> mapM
-        (\x -> withExceptT FaucetWebErrorTodo $ runInCIO () $ toTxOutInAnyEra sbe x)
-        (getTxOuts addressOrOutputs)
-      <*> pure TxTotalCollateralNone
-      <*> pure TxReturnCollateralNone
-      <*> validateTxFee sbe (Just fixedFee)
-      <*> pure TxValidityNoLowerBound
-      <*> pure (defaultTxValidityUpperBound sbe)
-      <*> pure TxMetadataNone
-      <*> pure TxAuxScriptsNone
-      <*> pure TxExtraKeyWitnessesNone
-      <*> pure (BuildTxWith Nothing)
-      <*> pure TxWithdrawalsNone
-      <*> pure certs
-      <*> pure TxUpdateProposalNone
-      <*> pure minting
-      <*> pure TxScriptValidityNone
-      <*> pure Nothing
-      <*> pure Nothing
-      <*> pure Nothing
-      <*> pure Nothing
+  -- The faucet's outputs never carry datums, so the supplemental-datum map is empty.
+  expOuts <-
+    mapM
+      ( \x -> do
+          (expOut, _supplementalDatums) <-
+            withExceptT FaucetWebErrorTodo $ runInCIO () $ toTxOutInAnyEra sbe x
+          pure expOut
+      )
+      (getTxOuts addressOrOutputs)
 
-  case createAndValidateTransactionBody sbe txBodyContent of
-    Left err -> left $ FaucetWebErrorTodo $ show err
-    Right txbody -> pure txbody
+  -- Old-API createTransactionBody errors on Dijkstra (extractWitnessableVotes),
+  -- so build via the experimental makeUnsignedTx. Inside obtainCommonConstraints
+  -- the ShelleyLedgerEra/LedgerEra equality lets the cli's ShelleyLedgerEra-typed
+  -- outputs and certs feed the LedgerEra-indexed body content.
+  obtainCommonConstraints expEra $ do
+    -- Rebuild each mint policy's witness from the old-API script CBOR: decode it
+    -- as an experimental SimpleScript for the target ledger era and wrap it as a
+    -- native (simple) script witness in the mint map.
+    mintWits <-
+      mapM
+        ( \(polId, assets, scriptCbor) -> do
+            simpleScript <-
+              either (left . FaucetWebErrorTodo . show) pure $
+                deserialiseSimpleScript scriptCbor
+            pure (polId, (assets, AnyScriptWitnessSimple (SScript simpleScript)))
+        )
+        mintEntries
+    let txBodyContent =
+          Exp.defaultTxBodyContent
+            { Exp.txIns = [(txin, Exp.AnyKeyWitnessPlaceholder)]
+            , Exp.txOuts = expOuts
+            , Exp.txFee = fixedFee
+            , Exp.txCertificates = Exp.mkTxCertificates expEra certList
+            , Exp.txMintValue = Exp.TxMintValue (Map.fromList mintWits)
+            }
+    case Exp.makeUnsignedTx expEra txBodyContent of
+      Left err -> left $ FaucetWebErrorTodo $ show err
+      Right unsignedTx -> pure unsignedTx
 
 {-
  -- keep this code for now, as an example of how to use the cardano api in a monad
@@ -147,31 +148,36 @@ return balancedTxBody
 
 txSign ::
   ShelleyBasedEra era ->
-  TxBody era ->
+  Era era ->
+  Exp.UnsignedTx (LedgerEra era) ->
   [ShelleyWitnessSigningKey] ->
   Tx era
-txSign era txBody sks = tx
+txSign sbe expEra unsignedTx sks =
+  case Exp.signTx expEra [] shelleyKeyWitnesses unsignedTx of
+    Exp.SignedTx ledgerTx -> ShelleyTx sbe ledgerTx
   where
-    -- let (sksByron, sksShelley) = partitionSomeWitnesses $ map categoriseSomeWitness sks
-
-    shelleyKeyWitnesses = map (makeShelleyKeyWitness era txBody) sks
-    tx = makeSignedTransaction shelleyKeyWitnesses txBody
+    shelleyKeyWitnesses = map (Exp.makeKeyWitness expEra unsignedTx) sks
 
 makeAndSignTx ::
   ShelleyBasedEra era ->
   (TxIn, TxOut CtxUTxO era) ->
   Either AddressAny [TxOutAnyEra] ->
   [ShelleyWitnessSigningKey] ->
-  TxCertificates BuildTx era ->
-  TxMintValue BuildTx era ->
+  [(ExpCert.Certificate (ShelleyLedgerEra era), Exp.AnyWitness (ShelleyLedgerEra era))] ->
+  [(PolicyId, PolicyAssets, ByteString)] ->
   Fee ->
   ExceptT FaucetWebError IO (Tx era, TxId)
-makeAndSignTx sbe txinout addressOrOutputs skeys certs minting fee = do
+makeAndSignTx sbe txinout addressOrOutputs skeys certList mintEntries fee = do
+  expEra <-
+    either
+      (const $ left $ FaucetWebErrorTodo "makeAndSignTx: era not supported (pre-Conway)")
+      pure
+      (sbeToEra sbe)
   -- instead of having to specify an output that is exactly equal to input-fees
   -- i specify no outputs, and set the change addr to the end-user
-  unsignedTx <- txBuild sbe txinout addressOrOutputs certs minting fee
+  unsignedTx <- txBuild sbe expEra txinout addressOrOutputs certList mintEntries fee
   let
+    signedTx = txSign sbe expEra unsignedTx skeys
     txid :: TxId
-    txid = getTxId unsignedTx
-    signedTx = txSign sbe unsignedTx skeys
+    txid = getTxId (getTxBody signedTx)
   pure (signedTx, txid)

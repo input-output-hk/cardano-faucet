@@ -18,7 +18,9 @@ module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest (..)) where
 import Cardano.Address.Derivation (Depth (PolicyK), XPrv)
 import Cardano.Address.Style.Shelley (Shelley, getKey)
 import Cardano.Api
+import Cardano.Api.Experimental.Certificate (PoolId)
 import Cardano.Api.Experimental.Certificate qualified as ExpCert
+import Cardano.Api.Experimental.Tx qualified as Exp
 import Cardano.Api.Ledger qualified as L
 import Cardano.CLI.Type.Common
 import Cardano.Faucet.Misc (faucetValueToLovelace, parseAddress, stripMintingTokens, toFaucetValue)
@@ -281,13 +283,12 @@ txoutToValue (TxOut _ txOutValue _ _) = txOutValueToValue txOutValue
 data TokenState = TokenState
   { tsAssetId :: AssetId
   , tsPolicyId :: PolicyId
-  , tsSimpleScript :: SimpleScript
   , tsPolicySKey :: SigningKey PaymentExtendedKey
   , tsScript :: Script SimpleScript'
   }
 
 getTokenState :: HasCallStack => Word32 -> AssetName -> FaucetState era -> TokenState
-getTokenState policy_index name FaucetState {fsRootKey} = TokenState {tsAssetId, tsPolicyId, tsSimpleScript, tsPolicySKey, tsScript}
+getTokenState policy_index name FaucetState {fsRootKey} = TokenState {tsAssetId, tsPolicyId, tsPolicySKey, tsScript}
   where
     policyKey :: Shelley 'PolicyK XPrv
     policyKey = rootKeyToPolicyKey fsRootKey (0x8000_0000 + policy_index)
@@ -295,46 +296,35 @@ getTokenState policy_index name FaucetState {fsRootKey} = TokenState {tsAssetId,
     tsPolicySKey = PaymentExtendedSigningKey $ getKey policyKey
     policy_vkey :: VerificationKey PaymentExtendedKey
     policy_vkey = getVerificationKey tsPolicySKey
-    tsSimpleScript :: SimpleScript
-    tsSimpleScript = RequireSignature $ verificationKeyHash $ castVerificationKey policy_vkey
+    simpleScript :: SimpleScript
+    simpleScript = RequireSignature $ verificationKeyHash $ castVerificationKey policy_vkey
     tsScript :: Script SimpleScript'
-    tsScript = SimpleScript tsSimpleScript
+    tsScript = SimpleScript simpleScript
     tsPolicyId = scriptPolicyId tsScript
     tsAssetId = AssetId tsPolicyId name
 
+-- | A mint entry passed to 'makeAndSignTx': the policy id, the assets to mint
+-- under it, and the native (simple) minting policy serialised to CBOR. TxUtils
+-- decodes the CBOR into the experimental SimpleScript for the target ledger era.
 getOptionalMintOutput ::
   ShelleyBasedEra era ->
   FaucetState era ->
   FaucetValue ->
-  ExceptT FaucetWebError IO (Value, TxMintValue BuildTx era, [ShelleyWitnessSigningKey])
-getOptionalMintOutput sbe fs (FaucetValueMultiAsset _ (FaucetMintToken (policy_index, name, quant))) = do
-  caseShelleyToAllegraOrMaryEraOnwards
-    (\_ -> left $ FaucetWebErrorTodo "era earlier than mary not supported")
-    ( \maryOnwards -> do
-        languageSupportedInEra <- case scriptLanguageSupportedInEra sbe SimpleScriptLanguage of
-          Just yes -> pure yes
-          Nothing -> left $ FaucetWebErrorTodo "scripts not supported"
-
-        let
-          TokenState {tsAssetId, tsPolicyId, tsSimpleScript, tsPolicySKey} = getTokenState policy_index name fs
-
-        assetName <- case tsAssetId of
-          AdaAssetId -> left $ FaucetWebErrorTodo "Not a multi asset"
-          AssetId _ assetName -> pure assetName
-
-        let
-          assets = PolicyAssets $ Map.fromList [(assetName, quant)]
-          witnessProvided = BuildTxWith $ SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript)
-          valueToMint = valueFromList [(tsAssetId, quant)]
-
-        pure
-          ( valueToMint
-          , TxMintValue maryOnwards (Map.fromList [(tsPolicyId, (assets, witnessProvided))])
-          , [WitnessPaymentExtendedKey tsPolicySKey]
-          )
+  ExceptT FaucetWebError IO (Value, [(PolicyId, PolicyAssets, ByteString)], [ShelleyWitnessSigningKey])
+getOptionalMintOutput _ fs (FaucetValueMultiAsset _ (FaucetMintToken (policy_index, name, quant))) = do
+  let TokenState {tsAssetId, tsPolicyId, tsPolicySKey, tsScript} = getTokenState policy_index name fs
+  assetName <- case tsAssetId of
+    AdaAssetId -> left $ FaucetWebErrorTodo "Not a multi asset"
+    AssetId _ assetName -> pure assetName
+  let
+    assets = PolicyAssets $ Map.fromList [(assetName, quant)]
+    valueToMint = valueFromList [(tsAssetId, quant)]
+  pure
+    ( valueToMint
+    , [(tsPolicyId, assets, serialiseToCBOR tsScript)]
+    , [WitnessPaymentExtendedKey tsPolicySKey]
     )
-    sbe
-getOptionalMintOutput _ _ _ = pure (mempty, TxMintNone, [])
+getOptionalMintOutput _ _ _ = pure (mempty, [], [])
 
 mintFreshTokens ::
   ShelleyBasedEra era ->
@@ -347,55 +337,36 @@ mintFreshTokens ::
   Fee ->
   ExceptT FaucetWebError IO (Tx era, TxId)
 mintFreshTokens sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsOwnAddress} policyIndex destinationAddress tokenname count tx_out_count (Fee feeLovelace) = do
+  let TokenState {tsAssetId, tsPolicyId, tsPolicySKey, tsScript} = getTokenState policyIndex tokenname fs
+  txinout@(_, txout) <- liftIO $ atomically $ findUtxoOfSize fsUtxoTMVar $ Ada $ L.Coin (1000 * 1_000_000)
+  assetName <- case tsAssetId of
+    AdaAssetId -> left $ FaucetWebErrorTodo "Not a multi asset"
+    AssetId _ assetName -> pure assetName
   let
-    TokenState {tsAssetId, tsPolicyId, tsSimpleScript, tsPolicySKey} = getTokenState policyIndex tokenname fs
-  txinout@(_, txout) <- liftIO $ atomically $ do
-    findUtxoOfSize fsUtxoTMVar $ Ada $ L.Coin (1000 * 1_000_000)
-  caseShelleyToAllegraOrMaryEraOnwards
-    (\_ -> left $ FaucetWebErrorTodo "era earlier than mary not supported")
-    ( \supported -> do
-        languageSupportedInEra <- case scriptLanguageSupportedInEra sbe SimpleScriptLanguage of
-          Just yes -> pure yes
-          Nothing -> left $ FaucetWebErrorTodo "scripts not supported"
-        assetName <- case tsAssetId of
-          AdaAssetId -> left $ FaucetWebErrorTodo "Not a multi asset"
-          AssetId _ assetName -> pure assetName
-        let
-          quant = Quantity (count * tx_out_count)
-          witnessProvided = BuildTxWith $ SimpleScriptWitness languageSupportedInEra (SScript tsSimpleScript)
-          valueToMint = valueFromList [(tsAssetId, quant)]
-          assets = PolicyAssets $ Map.fromList [(assetName, quant)]
-          mint = TxMintValue supported (Map.fromList [(tsPolicyId, (assets, witnessProvided))])
-          -- value in each utxo being created
-          outputValue = valueFromList [(AdaAssetId, Quantity 10_000_000), (tsAssetId, Quantity count)]
-          outputValues = replicate (fromIntegral tx_out_count) outputValue
-          -- takes an addr and a value, and creates a txout
-          to_txout :: AddressAny -> Value -> TxOutAnyEra
-          to_txout addr v = TxOutAnyEra addr v TxOutDatumByNone ReferenceScriptAnyEraNone
-          feeValue = lovelaceToValue feeLovelace
-          -- the desired txout's
-          outputs = map (to_txout destinationAddress) outputValues
-          output_sum = negateValue $ mconcat $ feeValue : outputValues
-          input_sum = mconcat [txoutToValue txout, valueToMint]
-          change = input_sum <> output_sum
-          -- prepend the change if there is any
-          outputsWithChange = if change == mempty then outputs else to_txout fsOwnAddress change : outputs
-        putStrLn $ format ("outputValue: " % sh) outputValue
-        putStrLn $ format ("output_sum: " % sh) output_sum
-        putStrLn $ format ("input_sum: " % sh) input_sum
-        putStrLn $ format ("change: " % sh) change
-        (signedTx, txid) <-
-          makeAndSignTx
-            sbe
-            txinout
-            (Right outputsWithChange)
-            [fsPaymentSkey, WitnessPaymentExtendedKey tsPolicySKey]
-            TxCertificatesNone
-            mint
-            (Fee feeLovelace)
-        pure (signedTx, txid)
-    )
+    quant = Quantity (count * tx_out_count)
+    valueToMint = valueFromList [(tsAssetId, quant)]
+    assets = PolicyAssets $ Map.fromList [(assetName, quant)]
+    mintEntries = [(tsPolicyId, assets, serialiseToCBOR tsScript)]
+    -- value in each utxo being created
+    outputValue = valueFromList [(AdaAssetId, Quantity 10_000_000), (tsAssetId, Quantity count)]
+    outputValues = replicate (fromIntegral tx_out_count) outputValue
+    to_txout :: AddressAny -> Value -> TxOutAnyEra
+    to_txout addr v = TxOutAnyEra addr v TxOutDatumByNone ReferenceScriptAnyEraNone
+    feeValue = lovelaceToValue feeLovelace
+    outputs = map (to_txout destinationAddress) outputValues
+    output_sum = negateValue $ mconcat $ feeValue : outputValues
+    input_sum = mconcat [txoutToValue txout, valueToMint]
+    change = input_sum <> output_sum
+    -- prepend the change if there is any
+    outputsWithChange = if change == mempty then outputs else to_txout fsOwnAddress change : outputs
+  makeAndSignTx
     sbe
+    txinout
+    (Right outputsWithChange)
+    [fsPaymentSkey, WitnessPaymentExtendedKey tsPolicySKey]
+    []
+    mintEntries
+    (Fee feeLovelace)
 
 handleDelegateStake ::
   ShelleyBasedEra era ->
@@ -480,8 +451,8 @@ handleDelegateStake
               txinout
               (Left fsOwnAddress)
               [fsPaymentSkey, stake_witness]
-              (mkTxCertificates sbe [(expCert, Nothing)])
-              TxMintNone
+              [(expCert, Exp.AnyKeyWitnessPlaceholder)]
+              []
               (Fee $ L.Coin 200_000)
           let
             prettyTx = prettyFriendlyTx sbe signedTx
@@ -743,7 +714,7 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
         txinout
         (Right outputs)
         (extraKeys <> [fsPaymentSkey])
-        TxCertificatesNone
+        []
         mintField
         (Fee feeLovelace)
     putStrLn $ format ("txin is worth: " % sh) txInValue

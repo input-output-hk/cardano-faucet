@@ -53,7 +53,7 @@ import Cardano.Api.Address (
   makeStakeAddress,
  )
 import Cardano.Api.Block (SlotNo)
-import Cardano.Api.Certificate (PoolId)
+import Cardano.Api.Experimental.Certificate (PoolId)
 import Cardano.Api.Key (
   SigningKey (StakeExtendedSigningKey),
   StakeExtendedKey,

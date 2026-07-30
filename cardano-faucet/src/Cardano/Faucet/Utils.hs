@@ -13,7 +13,7 @@ import Cardano.Api (
   CardanoEra (..),
   CtxUTxO,
   ShelleyBasedEra,
-  Tx,
+  Tx (ShelleyTx),
   TxFee (..),
   TxIn,
   TxOut (TxOut),
@@ -25,6 +25,7 @@ import Cardano.Api (
  )
 import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Era (ShelleyBasedEra (..))
+import Cardano.Api.Experimental qualified as Exp
 import Cardano.CLI.Compatible.Exception (CIO, CustomCliException)
 import Cardano.CLI.Compatible.Json.Friendly qualified as CLI
 import Cardano.CLI.Type.MonadWarning qualified as CLI
@@ -33,6 +34,7 @@ import Cardano.Faucet.Types
 import Cardano.Prelude hiding ((%))
 import Control.Concurrent.STM (TMVar, putTMVar, takeTMVar)
 import Control.Monad.Trans.Except.Extra (left)
+import Data.Aeson (object)
 import Data.Aeson.Encode.Pretty qualified as Aeson
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
@@ -120,10 +122,13 @@ prettyFriendlyTx ::
   ShelleyBasedEra era ->
   Tx era ->
   BS.ByteString
-prettyFriendlyTx sbe tx =
-  BS.concat . LBS.toChunks $ Aeson.encodePretty' jsonConfig prettyTxAeson
+prettyFriendlyTx sbe (ShelleyTx _ ledgerTx) =
+  either (const mempty) render (Exp.sbeToEra sbe)
   where
-    prettyTxAeson = fst $ runState (CLI.runWarningStateT $ CLI.friendlyTxImpl sbe tx) []
+    render era =
+      Exp.obtainCommonConstraints era $
+        BS.concat . LBS.toChunks . Aeson.encodePretty' jsonConfig . object $
+          fst (runState (CLI.runWarningStateT (CLI.friendlyTxImpl era (Exp.SignedTx ledgerTx))) [])
     jsonConfig = Aeson.defConfig{Aeson.confCompare = compare}
 
 -- | @cardanoEraToShelleyBasedEra@ converts a 'CardanoEra' to a 'ShelleyBasedEra'
