@@ -225,7 +225,7 @@ handleMintCoins era fs@FaucetState {fsTxQueue} addr fee output_count tokens_per_
   liftIO $ runExceptT $ do
     addressAny <- parseAddress addr
     print addressAny
-    (signedTx, _txid) <-
+    (signedTx, txid) <-
       mintFreshTokens
         era
         fs
@@ -236,7 +236,7 @@ handleMintCoins era fs@FaucetState {fsTxQueue} addr fee output_count tokens_per_
         output_count
         (Fee $ L.Coin fee)
     let prettyTx = prettyFriendlyTx era signedTx
-    liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode era signedTx, prettyTx)
+    liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode era signedTx, prettyTx, txid)
     pure ()
 
 {-test :: IO ()
@@ -456,8 +456,13 @@ handleDelegateStake
               (Fee $ L.Coin 200_000)
           let
             prettyTx = prettyFriendlyTx sbe signedTx
-          putStrLn $ format ("delegating stake key to pool " % sh) (serialiseToBech32 poolId)
-          liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode sbe signedTx, prettyTx)
+          putStrLn
+            $ format
+              (sh % ": delegating stake key to pool " % sh % " via txid " % sh)
+              clientIP
+              (serialiseToBech32 poolId)
+              txid
+          liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode sbe signedTx, prettyTx, txid)
           pure $ DelegationReplySuccess txid
     let corsHeader = getCorsReply (fcfAllowedCorsOrigins fsConfig) mOrigin
     case eResult of
@@ -727,7 +732,7 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
         txid
     let
       prettyTx = prettyFriendlyTx sbe signedTx
-    liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode sbe signedTx, prettyTx)
+    liftIO $ atomically $ writeTQueue fsTxQueue (TxInMode sbe signedTx, prettyTx, txid)
     return $ SendMoneyReplySuccess $ SendMoneySent txid txin limitFaucetValue
   let corsHeader = getCorsReply (fcfAllowedCorsOrigins fsConfig) mOrigin
   case eResult of

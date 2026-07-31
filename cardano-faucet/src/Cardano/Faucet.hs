@@ -38,7 +38,9 @@ import Cardano.Api (
   ShelleyBasedEra,
   ShelleyWitnessSigningKey (WitnessPaymentExtendedKey),
   SigningKey (PaymentExtendedSigningKey),
+  TxId,
   TxInMode,
+  TxValidationErrorInCardanoMode,
   UTxO (unUTxO),
   connectToLocalNode,
   getVerificationKey,
@@ -295,12 +297,14 @@ sortStakeKeys (registeredStakeKeys, delegatedStakeKeys) manyStakeKeys = do
     filterOnlyDelegated _ = Nothing
 
 submissionClient ::
-  Bool -> TQueue (TxInMode, ByteString) -> Net.Tx.LocalTxSubmissionClient TxInMode reject IO a2
+  Bool ->
+  TQueue (TxInMode, ByteString, TxId) ->
+  Net.Tx.LocalTxSubmissionClient TxInMode TxValidationErrorInCardanoMode IO a2
 submissionClient dryRun txQueue = Net.Tx.LocalTxSubmissionClient waitForTxAndLoop
   where
-    waitForTxAndLoop :: IO (Net.Tx.LocalTxClientStIdle TxInMode reject IO a)
+    waitForTxAndLoop :: IO (Net.Tx.LocalTxClientStIdle TxInMode TxValidationErrorInCardanoMode IO a)
     waitForTxAndLoop = do
-      (tx, prettyTx) <- atomically $ readTQueue txQueue
+      (tx, prettyTx, txid) <- atomically $ readTQueue txQueue
       if dryRun
         then do
           putStrLn @Text "dry-run, not sending the following tx:"
@@ -308,10 +312,14 @@ submissionClient dryRun txQueue = Net.Tx.LocalTxSubmissionClient waitForTxAndLoo
           waitForTxAndLoop
         else pure $ Net.Tx.SendMsgSubmitTx tx $ \case
           Net.Tx.SubmitSuccess -> do
-            putStrLn @Text "tx submitted successfully"
+            putStrLn $ format ("tx submitted successfully: txid " % sh) txid
             waitForTxAndLoop
-          Net.Tx.SubmitFail _reason -> do
-            putStrLn @Text "tx submission FAILED"
+          Net.Tx.SubmitFail reason -> do
+            putStrLn
+              $ format
+                ("tx submission FAILED: txid " % sh % " reason: " % sh)
+                txid
+                reason
             waitForTxAndLoop
 
 queryManyStakeAddr ::
@@ -322,7 +330,7 @@ queryManyStakeAddr ::
 queryManyStakeAddr sbe network creds = QueryInEra (QueryInShelleyBasedEra sbe (QueryStakeAddresses (Set.fromList creds) network))
 
 newFaucetState ::
-  FaucetConfigFile -> TQueue (TxInMode, ByteString) -> ExceptT FaucetError IO (FaucetState era)
+  FaucetConfigFile -> TQueue (TxInMode, ByteString, TxId) -> ExceptT FaucetError IO (FaucetState era)
 newFaucetState fsConfig fsTxQueue = do
   (fsUtxoTMVar, fsStakeTMVar, fsSendMoneyRateLimitState, fsDelegationRateLimitState) <-
     liftIO $ (,,,) <$> newEmptyTMVarIO <*> newEmptyTMVarIO <*> newTMVarIO mempty <*> newTMVarIO mempty
@@ -399,7 +407,7 @@ queryStakeKeyLoop era network manyStakeKeys debug faucetState initial = do
 
 queryClient ::
   FaucetConfigFile ->
-  TQueue (TxInMode, ByteString) ->
+  TQueue (TxInMode, ByteString, TxId) ->
   Port ->
   Net.Query.LocalStateQueryClient BlockInMode ChainPoint QueryInMode IO ()
 queryClient config txQueue port = LocalStateQueryClient $ do
