@@ -44,6 +44,7 @@ import Cardano.Faucet.Types (
   UtxoStats (..),
   describeApiKey,
   isLoopbackIp,
+  keyFingerprint,
   maskForRateLimit,
   rootKeyToPolicyKey,
  )
@@ -434,7 +435,9 @@ handleDelegateStake
       (key, limits) <- case mReply of
         Just (_, ApiKeyValue _ _ _ _ False) -> left FaucetWebErrorKeyCantDelegate
         Just x -> pure x
-        Nothing -> left FaucetWebErrorInvalidApiKey
+        Nothing -> do
+          liftIO $ logRejectedApiKey clientIP mApiKey
+          left FaucetWebErrorInvalidApiKey
       now <- liftIO getCurrentTime
       res <- liftIO $ atomically $ do
         let
@@ -723,7 +726,9 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
     mReply <- liftIO $ decideBetweenKeyAndCaptcha mType mApiKey mToken fsConfig
     (key, limits) <- case mReply of
       Just x -> pure x
-      Nothing -> left FaucetWebErrorInvalidApiKey
+      Nothing -> do
+        liftIO $ logRejectedApiKey clientIP mApiKey
+        left FaucetWebErrorInvalidApiKey
     let
       limitFaucetValue = toFaucetValue limits
       withoutMintedTokens = stripMintingTokens limitFaucetValue
@@ -789,6 +794,13 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
     Left err -> do
       liftIO $ logError clientIP err
       pure $ corsHeader $ SendMoneyError err
+
+-- fingerprint of a rejected key, so repeat attempts of one key can be told apart
+-- from guessing. logged server side only, the reply is unchanged.
+logRejectedApiKey :: IPv6 -> Maybe Text -> IO ()
+logRejectedApiKey _ Nothing = pure ()
+logRejectedApiKey ip (Just attempted) =
+  putStrLn $ format (sh % ": rejected api key " % st) ip (keyFingerprint attempted)
 
 logError :: IPv6 -> FaucetWebError -> IO ()
 logError ip (FaucetWebErrorRateLimitExeeeded secs addr) =
