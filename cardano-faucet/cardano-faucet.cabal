@@ -65,6 +65,7 @@ library
                       , cardano-addresses  >= 4
                       , cardano-api       ^>= 11.3
                       , cardano-cli
+                      , cardano-crypto-class
                       , cardano-prelude
                       , containers
                       , either

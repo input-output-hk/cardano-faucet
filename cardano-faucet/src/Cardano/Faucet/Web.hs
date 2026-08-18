@@ -45,6 +45,9 @@ import Cardano.Faucet.Types (
   SiteVerifyReply (..),
   SiteVerifyRequest (..),
   UtxoStats (..),
+  describeApiKey,
+  isLoopbackIp,
+  maskForRateLimit,
   rootKeyToPolicyKey,
  )
 import Cardano.Faucet.Utils (computeUtxoStats, findUtxoOfSize, prettyFriendlyTx)
@@ -52,7 +55,7 @@ import Cardano.Prelude hiding ((%))
 import Control.Concurrent.STM (TMVar, putTMVar, readTMVar, takeTMVar, writeTQueue)
 import Data.Aeson (eitherDecode)
 import Data.ByteString.Lazy qualified as LBS
-import Data.IP (IPv6, fromHostAddress, ipv4ToIPv6)
+import Data.IP (IPv6, fromHostAddress, fromHostAddress6, ipv4ToIPv6)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as LT
@@ -62,7 +65,7 @@ import Formatting (format, sformat, (%))
 import Formatting.ShortFormatters hiding (b, f, l, x)
 import Network.HTTP.Client.TLS (newTlsManagerWith, tlsManagerSettings)
 import Network.HTTP.Media.MediaType ((//), (/:))
-import Network.Socket (SockAddr (SockAddrInet))
+import Network.Socket (SockAddr (SockAddrInet, SockAddrInet6))
 import Protolude (print)
 import Servant
 import Servant.Client (
@@ -411,7 +414,7 @@ handleDelegateStake
             limitResult <-
               checkRateLimits
                 now
-                [RateLimitAddressPool poolId, RateLimitAddressNetwork clientIP]
+                [RateLimitAddressPool poolId, RateLimitAddressNetwork (maskForRateLimit clientIP)]
                 key
                 fsDelegationRateLimitState
                 limits
@@ -631,10 +634,34 @@ handleMetrics FaucetState {fsUtxoTMVar, fsBucketSizes, fsConfig, fsStakeTMVar} =
       result = Cardano.Prelude.unlines $ Cardano.Prelude.map toMetric metrics
     pure result
 
+-- the address a request is attributed to, for rate limiting
+--
+-- X-Forwarded-For is client supplied and cannot be trusted as sent. nginx is
+-- configured with $proxy_add_x_forwarded_for, which appends the peer it saw to
+-- whatever the client sent, so only the final header element was written by us.
+-- parseIpList already stores the list reversed, so that trustworthy element is
+-- the head here. every other element is caller controlled.
+--
+-- the header is only believed when the connection came from the local reverse
+-- proxy. a request arriving any other way is attributed to its socket address.
+--
+-- an address family we cannot resolve never reaches the header check, and is
+-- attributed to 0.0.0.0 rather than loopback so it neither looks like local
+-- traffic in the logs nor shares a rate limit bucket with it.
 pickIp :: Maybe ForwardedFor -> SockAddr -> IPv6
-pickIp (Just (ForwardedFor (a : _))) _ = a
-pickIp _ (SockAddrInet _port hostaddr) = ipv4ToIPv6 $ fromHostAddress hostaddr
-pickIp _ _ = ipv4ToIPv6 $ fromHostAddress 0x100_007f -- 127.0.0.1, little-endian arch
+pickIp mForwardedFor sockAddr = case mSocketIp of
+  Just socketIp
+    | isLoopbackIp socketIp
+    , Just (ForwardedFor (proxyObservedPeer : _)) <- mForwardedFor ->
+        proxyObservedPeer
+    | otherwise -> socketIp
+  Nothing -> ipv4ToIPv6 $ fromHostAddress 0 -- 0.0.0.0, unresolvable address family
+  where
+    mSocketIp :: Maybe IPv6
+    mSocketIp = case sockAddr of
+      SockAddrInet _port hostaddr -> Just $ ipv4ToIPv6 $ fromHostAddress hostaddr
+      SockAddrInet6 _port _flow hostaddr6 _scope -> Just $ fromHostAddress6 hostaddr6
+      _ -> Nothing
 
 -- if a valid api key is given, return that key and its limits
 -- if the apikey is invalid, act like it didnt exist
@@ -682,9 +709,13 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
     let
       limitFaucetValue = toFaucetValue limits
       withoutMintedTokens = stripMintingTokens limitFaucetValue
-    print limits
-    print limitFaucetValue
-    print withoutMintedTokens
+    -- identify the caller without disclosing the credential
+    putStrLn $
+      format
+        ("request from " % sh % " authorised by " % st % " for " % sh)
+        clientIP
+        (describeApiKey key)
+        limitFaucetValue
     now <- liftIO getCurrentTime
     result <- liftIO $ atomically $ do
       let
@@ -692,7 +723,7 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
           limitResult <-
             checkRateLimits
               now
-              [RateLimitAddressCardano addressAny, RateLimitAddressNetwork clientIP]
+              [RateLimitAddressCardano addressAny, RateLimitAddressNetwork (maskForRateLimit clientIP)]
               key
               fsSendMoneyRateLimitState
               limits
