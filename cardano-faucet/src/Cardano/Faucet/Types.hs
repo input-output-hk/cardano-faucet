@@ -22,6 +22,10 @@ module Cardano.Faucet.Types (
   RateLimitResult (..),
   ApiKey (..),
   RateLimitAddress (..),
+  describeApiKey,
+  isLoopbackIp,
+  keyFingerprint,
+  maskForRateLimit,
   FaucetConfigFile (..),
   SiteKey (..),
   SendMoneySent (..),
@@ -84,15 +88,19 @@ import Data.Aeson.KeyMap (member)
 import Data.Aeson.Types (Parser)
 import Data.ByteString.Char8 qualified as BSC
 import Data.Either.Combinators (mapRight)
-import Data.IP (IP (..), IPv6, ipv4ToIPv6)
+import Cardano.Crypto.Hash (hashToStringAsHex, hashWith)
+import Cardano.Crypto.Hash.SHA256 (SHA256)
+import Data.IP (IP (..), IPv6, fromIPv6b, ipv4ToIPv6, toIPv6b)
+import Data.Text.Encoding qualified as TE
 import Data.List.Split (splitOn)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Time.Clock (NominalDiffTime, UTCTime)
 import Protolude (print)
 import Servant (FromHttpApiData (parseHeader, parseQueryParam, parseUrlPiece))
+import Text.Read qualified as TR
 import Web.Internal.FormUrlEncoded (ToForm (toForm), fromEntriesByKey)
-import Prelude (String, error, fail, read)
+import Prelude (String, error, fail)
 
 -- the sitekey, secretkey, and token from recaptcha
 newtype SiteKey = SiteKey {unSiteKey :: Text} deriving (Show)
@@ -110,9 +118,23 @@ parseIp :: IP -> IPv6
 parseIp (IPv4 ip) = ipv4ToIPv6 ip
 parseIp (IPv6 ip) = ip
 
+-- X-Forwarded-For is caller supplied, so an unparseable element is dropped
+-- rather than throwing from a partial read. if nothing parses the list is empty
+-- and pickIp falls back to the socket address.
+--
+-- each element is stripped before parsing. nginx writes "client, peer" when the
+-- caller already sent the header, so the element we trust carries a leading
+-- space; dropping it for that reason would promote a caller supplied element to
+-- the head of the reversed list, which is exactly what pickIp must not trust.
 parseIpList :: Prelude.String -> ForwardedFor
 parseIpList input =
-  ForwardedFor $ reverse $ map (\addr -> parseIp (Prelude.read addr :: IP)) (splitOn "," input)
+  ForwardedFor $ reverse $ mapMaybe readIp (splitOn "," input)
+  where
+    readIp :: Prelude.String -> Maybe IPv6
+    readIp addr = parseIp <$> (TR.readMaybe (strip addr) :: Maybe IP)
+
+    strip :: Prelude.String -> Prelude.String
+    strip = T.unpack . T.strip . T.pack
 
 instance FromHttpApiData ForwardedFor where
   parseHeader = Right . parseIpList . BSC.unpack
@@ -167,13 +189,30 @@ instance Aeson.ToJSON FaucetWebError where
 -- Recaptcha is a special key, that can only be obtained by answering a recaptcha prompt, and has an optional type=x in the URL
 data ApiKey = Recaptcha Text | ApiKey Text deriving (Ord, Eq)
 
+-- a short, non reversible identifier for an api key
+--
+-- plain sha256 of the utf8 key bytes, first 12 hex chars, so it is reproducible
+-- with coreutils alone and needs nothing added to the devShell:
+--
+--   printf '%s' "$KEY" | sha256sum | cut -c1-12
+--
+-- note printf rather than echo, a trailing newline changes the digest.
+keyFingerprint :: Text -> Text
+keyFingerprint key =
+  T.take 12 . T.pack . hashToStringAsHex $ hashWith @SHA256 TE.encodeUtf8 key
+
+-- which credential authorised a request, safe to log
+describeApiKey :: ApiKey -> Text
+describeApiKey (Recaptcha captchaType) = "recaptcha:" <> captchaType
+describeApiKey (ApiKey key) = "apikey:" <> keyFingerprint key
+
 -- the state of the entire faucet
 data FaucetState era = FaucetState
   { fsUtxoTMVar :: TMVar (Map TxIn (TxOut CtxUTxO era))
   , fsStakeTMVar ::
       TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, L.Coin, PoolId)])
   , fsNetwork :: NetworkId
-  , fsTxQueue :: TQueue (TxInMode, ByteString)
+  , fsTxQueue :: TQueue (TxInMode, ByteString, TxId)
   , fsRootKey :: Shelley 'RootK XPrv
   , fsPaymentSkey :: ShelleyWitnessSigningKey
   , fsPaymentVkey :: VerificationKey PaymentExtendedKey
@@ -203,6 +242,29 @@ data RateLimitAddress
   | RateLimitAddressNetwork IPv6
   | RateLimitAddressPool PoolId
   deriving (Eq, Ord)
+
+-- collapse an address to the unit we rate limit on
+--
+-- rate limiting on an exact address lets a caller holding many addresses in one
+-- subnet multiply their allowance, so aggregate first: ipv4 to a /24, ipv6 to a
+-- /64. addresses reach here already normalised to ipv6, with ipv4 mapped into
+-- ::ffff:0:0/96, so the mapped case is matched on its byte layout.
+maskForRateLimit :: IPv6 -> IPv6
+maskForRateLimit ip = case fromIPv6b ip of
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, a, b, c, _d] ->
+    toIPv6b [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, a, b, c, 0]
+  bytes
+    | length bytes == 16 -> toIPv6b (take 8 bytes <> replicate 8 0)
+    | otherwise -> toIPv6b bytes
+
+-- is this address the local reverse proxy
+--
+-- only the proxy is believed about a client address, see pickIp
+isLoopbackIp :: IPv6 -> Bool
+isLoopbackIp ip = case fromIPv6b ip of
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, _, _, _] -> True
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1] -> True
+  _ -> False
 
 -- send-money success reply
 data SendMoneySent = SendMoneySent
@@ -247,7 +309,12 @@ data ApiKeyValue = ApiKeyValue
   , akvTokens :: Maybe FaucetToken
   , akvCanDelegate :: Bool
   }
-  deriving (Generic, Show)
+  deriving (Generic)
+
+-- deliberately no Show instance for ApiKeyValue, and none for FaucetConfigFile
+-- below either.
+--
+-- to identify a caller in a log line, use describeApiKey or keyFingerprint.
 
 instance Aeson.FromJSON ApiKeyValue where
   parseJSON = Aeson.withObject "ApiKeyValue" $ \v -> do
@@ -272,7 +339,7 @@ data FaucetConfigFile = FaucetConfigFile
   , fcfAllowedCorsOrigins :: [Text]
   , fcfAddressIndex :: Word32
   }
-  deriving (Generic, Show)
+  deriving (Generic)
 
 -- copied from bench/tx-generator/src/Cardano/TxGenerator/Internal/Orphans.hs
 instance Aeson.FromJSON NetworkId where
@@ -416,7 +483,6 @@ test :: IO ()
 test = do
   eResult <- runExceptT $ do
     config <- parseConfig "/home/clever/iohk/cardano-world/sample-config.json"
-    print config
     rootK <- mnemonicToRootKey $ fcfMnemonic config
     let acctK = rootKeytoAcctKey rootK 0x80000000
 
