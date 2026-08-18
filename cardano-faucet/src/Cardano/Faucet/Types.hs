@@ -98,8 +98,9 @@ import Data.Text qualified as T
 import Data.Time.Clock (NominalDiffTime, UTCTime)
 import Protolude (print)
 import Servant (FromHttpApiData (parseHeader, parseQueryParam, parseUrlPiece))
+import Text.Read qualified as TR
 import Web.Internal.FormUrlEncoded (ToForm (toForm), fromEntriesByKey)
-import Prelude (String, error, fail, read)
+import Prelude (String, error, fail)
 
 -- the sitekey, secretkey, and token from recaptcha
 newtype SiteKey = SiteKey {unSiteKey :: Text} deriving (Show)
@@ -117,9 +118,23 @@ parseIp :: IP -> IPv6
 parseIp (IPv4 ip) = ipv4ToIPv6 ip
 parseIp (IPv6 ip) = ip
 
+-- X-Forwarded-For is caller supplied, so an unparseable element is dropped
+-- rather than throwing from a partial read. if nothing parses the list is empty
+-- and pickIp falls back to the socket address.
+--
+-- each element is stripped before parsing. nginx writes "client, peer" when the
+-- caller already sent the header, so the element we trust carries a leading
+-- space; dropping it for that reason would promote a caller supplied element to
+-- the head of the reversed list, which is exactly what pickIp must not trust.
 parseIpList :: Prelude.String -> ForwardedFor
 parseIpList input =
-  ForwardedFor $ reverse $ map (\addr -> parseIp (Prelude.read addr :: IP)) (splitOn "," input)
+  ForwardedFor $ reverse $ mapMaybe readIp (splitOn "," input)
+  where
+    readIp :: Prelude.String -> Maybe IPv6
+    readIp addr = parseIp <$> (TR.readMaybe (strip addr) :: Maybe IP)
+
+    strip :: Prelude.String -> Prelude.String
+    strip = T.unpack . T.strip . T.pack
 
 instance FromHttpApiData ForwardedFor where
   parseHeader = Right . parseIpList . BSC.unpack
