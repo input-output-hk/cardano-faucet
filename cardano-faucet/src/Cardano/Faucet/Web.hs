@@ -496,6 +496,7 @@ handleDelegateStake
     let corsHeader = getCorsReply (fcfAllowedCorsOrigins fsConfig) mOrigin
     case eResult of
       Left err -> do
+        liftIO $ logError clientIP err
         pure $ corsHeader $ DelegationReplyError err
       Right result -> do
         pure $ corsHeader result
