@@ -197,7 +197,7 @@ data FaucetState era = FaucetState
   , fsStakeTMVar ::
       TMVar ([(Word32, SigningKey StakeExtendedKey, StakeCredential)], [(Word32, L.Coin, PoolId)])
   , fsNetwork :: NetworkId
-  , fsTxQueue :: TQueue (TxInMode, ByteString)
+  , fsTxQueue :: TQueue (TxInMode, ByteString, TxId)
   , fsRootKey :: Shelley 'RootK XPrv
   , fsPaymentSkey :: ShelleyWitnessSigningKey
   , fsPaymentVkey :: VerificationKey PaymentExtendedKey
