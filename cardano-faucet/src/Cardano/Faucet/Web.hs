@@ -17,7 +17,7 @@ module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest (..)) where
 
 import Cardano.Address.Derivation (Depth (PolicyK), XPrv)
 import Cardano.Address.Style.Shelley (Shelley, getKey)
-import Cardano.Api
+import Cardano.Api hiding (Header)
 import Cardano.Api.Experimental.Certificate (PoolId)
 import Cardano.Api.Experimental.Certificate qualified as ExpCert
 import Cardano.Api.Experimental.Tx qualified as Exp
@@ -438,7 +438,7 @@ handleDelegateStake
           let
             poolKeyHash :: L.KeyHash L.StakePool = unStakePoolKeyHash poolId
             expCert =
-              caseShelleyToBabbageOrConwayOrDijkstra
+              caseShelleyToBabbageOrConwayEraOnwards
                 ( \_ ->
                     let ledgerCert = L.mkDelegStakeTxCert (toShelleyStakeCredential creds) (unStakePoolKeyHash poolId)
                      in ExpCert.Certificate ledgerCert

@@ -63,7 +63,7 @@ library
                       , MissingH
                       , bytestring
                       , cardano-addresses  >= 4
-                      , cardano-api       ^>= 11.3
+                      , cardano-api       ^>= 11.6
                       , cardano-cli
                       , cardano-crypto-class
                       , cardano-prelude
