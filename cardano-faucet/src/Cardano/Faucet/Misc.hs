@@ -39,8 +39,8 @@ getValue (TxOutValueShelleyBased sbe val) = convertRemaining remaining
     convertRemaining _ = FaucetValueManyTokens ll
 
 toFaucetValue :: ApiKeyValue -> FaucetValue
-toFaucetValue (ApiKeyValue _ lovelace _ Nothing _) = Ada lovelace
-toFaucetValue (ApiKeyValue _ ll _ (Just t) _) = FaucetValueMultiAsset ll t
+toFaucetValue ApiKeyValue {akvLovelace = lovelace, akvTokens = Nothing} = Ada lovelace
+toFaucetValue ApiKeyValue {akvLovelace = ll, akvTokens = Just t} = FaucetValueMultiAsset ll t
 
 stripMintingTokens :: FaucetValue -> FaucetValue
 stripMintingTokens fv@(Ada _) = fv

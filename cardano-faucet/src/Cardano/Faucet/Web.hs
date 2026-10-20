@@ -13,7 +13,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest (..)) where
+module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest (..), checkRateLimits) where
 
 import Cardano.Address.Derivation (Depth (PolicyK), XPrv)
 import Cardano.Address.Style.Shelley (Shelley, getKey)
@@ -62,7 +62,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LT
-import Data.Time.Clock (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
+import Data.Time.Clock (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
 import Formatting (format, sformat, (%))
 import Formatting.ShortFormatters hiding (b, f, l, x)
 import Network.HTTP.Client.TLS (newTlsManagerWith, tlsManagerSettings)
@@ -406,7 +406,7 @@ handleDelegateStake
       when (isNothing (fcfMaxStakeKeyIndex fsConfig)) $ left $ FaucetWebErrorTodo "delegation disabled"
       mReply <- liftIO $ decideBetweenKeyAndCaptcha Nothing mApiKey mToken fsConfig
       (key, limits) <- case mReply of
-        Just (_, ApiKeyValue _ _ _ _ False) -> left FaucetWebErrorKeyCantDelegate
+        Just (_, ApiKeyValue {akvCanDelegate = False}) -> left FaucetWebErrorKeyCantDelegate
         Just x -> pure x
         Nothing -> do
           liftIO $ logRejectedApiKey clientIP mApiKey
@@ -421,7 +421,7 @@ handleDelegateStake
                 [RateLimitAddressPool poolId, RateLimitAddressNetwork (maskForRateLimit clientIP)]
                 key
                 fsDelegationRateLimitState
-                limits
+                (akvDelegationRateLimit limits)
             case limitResult of
               RateLimitResultAllow -> do
                 -- the rate limits allow the action at the current time
@@ -492,9 +492,9 @@ checkRateLimits ::
   [RateLimitAddress] ->
   ApiKey ->
   TMVar (Map ApiKey (Map RateLimitAddress UTCTime)) ->
-  ApiKeyValue ->
+  NominalDiffTime ->
   STM RateLimitResult
-checkRateLimits now addresses apikey limitState ApiKeyValue {akvRateLimit} = do
+checkRateLimits now addresses apikey limitState akvRateLimit = do
   mainMap <- readTMVar limitState
   let
     -- when many addresses where last used, for the current key
@@ -728,7 +728,7 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
               [RateLimitAddressCardano addressAny, RateLimitAddressNetwork (maskForRateLimit clientIP)]
               key
               fsSendMoneyRateLimitState
-              limits
+              (akvRateLimit limits)
           case limitResult of
             RateLimitResultAllow -> do
               txinout <- findUtxoOfSize fsUtxoTMVar withoutMintedTokens

@@ -310,6 +310,7 @@ data ApiKeyValue = ApiKeyValue
   { akvApiKey :: Text
   , akvLovelace :: L.Coin
   , akvRateLimit :: NominalDiffTime
+  , akvDelegationRateLimit :: NominalDiffTime
   , akvTokens :: Maybe FaucetToken
   , akvCanDelegate :: Bool
   }
@@ -325,6 +326,7 @@ instance Aeson.FromJSON ApiKeyValue where
     akvApiKey <- v .: "api_key"
     akvLovelace <- v .: "lovelace"
     akvRateLimit <- v .: "rate_limit"
+    akvDelegationRateLimit <- fromMaybe akvRateLimit <$> v .:? "delegation_rate_limit"
     akvTokens <- v .:? "tokens"
     akvCanDelegate <- fromMaybe False <$> v .:? "delegate"
     pure $ ApiKeyValue {..}
