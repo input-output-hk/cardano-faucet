@@ -38,6 +38,8 @@ module Cardano.Faucet.Types (
   mnemonicToRootKey,
   rootKeytoAcctKey,
   accountKeyToPaymentKey,
+  toPaymentSigningKey,
+  toStakeSigningKey,
   renderFaucetError,
   test,
 ) where
@@ -51,6 +53,7 @@ import Cardano.Address.Derivation (
   deriveAddressPrivateKey,
   genMasterKeyFromMnemonic,
   indexFromWord32,
+  xprvToBytes,
  )
 import Cardano.Address.Style.Shelley (Role (Stake, UTxOExternal), Shelley, derivePolicyPrivateKey)
 import Cardano.Api (
@@ -63,7 +66,7 @@ import Cardano.Api (
   InputDecodeError,
   PaymentExtendedKey,
   Quantity,
-  SigningKey,
+  SigningKey (PaymentExtendedSigningKey, StakeExtendedSigningKey),
   TxId,
   TxIn,
   TxInMode,
@@ -72,6 +75,7 @@ import Cardano.Api (
   docToText,
  )
 import Cardano.Api.Ledger qualified as L
+import Cardano.Api.Crypto.Ed25519Bip32 (xPrvFromBytes)
 import Cardano.Api.Address (StakeCredential, StakeExtendedKey)
 import Cardano.Api.Experimental.Certificate (PoolId)
 import Cardano.Api.Network (NetworkId (Mainnet, Testnet), NetworkMagic (NetworkMagic))
@@ -475,6 +479,14 @@ accountKeyToPaymentKey acctK index = deriveAddressPrivateKey acctK UTxOExternal 
 
 rootKeyToPolicyKey :: HasCallStack => Shelley 'RootK XPrv -> Word32 -> Shelley 'PolicyK XPrv
 rootKeyToPolicyKey acctK index = derivePolicyPrivateKey acctK $ convertHardenedIndex index
+
+-- cardano-addresses uses its own extended-key type. Convert through the same
+-- byte representation as cardano-api's mnemonic signing-key implementation.
+toPaymentSigningKey :: XPrv -> SigningKey PaymentExtendedKey
+toPaymentSigningKey = PaymentExtendedSigningKey . fromMaybe (error "toPaymentSigningKey: invalid derived key") . xPrvFromBytes . xprvToBytes
+
+toStakeSigningKey :: XPrv -> SigningKey StakeExtendedKey
+toStakeSigningKey = StakeExtendedSigningKey . fromMaybe (error "toStakeSigningKey: invalid derived key") . xPrvFromBytes . xprvToBytes
 
 accountKeyToStakeKey :: Shelley 'AccountK XPrv -> Word32 -> Shelley 'PaymentK XPrv
 accountKeyToStakeKey acctK index = deriveAddressPrivateKey acctK Stake $ convertSoftIndex index

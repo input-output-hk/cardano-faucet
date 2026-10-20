@@ -37,7 +37,7 @@ import Cardano.Api (
   QueryUTxOFilter (QueryUTxOByAddress),
   ShelleyBasedEra,
   ShelleyWitnessSigningKey (WitnessPaymentExtendedKey),
-  SigningKey (PaymentExtendedSigningKey),
+  SigningKey,
   TxId,
   TxInMode,
   TxValidationErrorInCardanoMode,
@@ -57,7 +57,6 @@ import Cardano.Api.Address (
 import Cardano.Api.Block (SlotNo)
 import Cardano.Api.Experimental.Certificate (PoolId)
 import Cardano.Api.Key (
-  SigningKey (StakeExtendedSigningKey),
   StakeExtendedKey,
   castVerificationKey,
   verificationKeyHash,
@@ -79,6 +78,8 @@ import Cardano.Faucet.Types (
   parseConfig,
   renderFaucetError,
   rootKeytoAcctKey,
+  toPaymentSigningKey,
+  toStakeSigningKey,
  )
 import Cardano.Faucet.Utils
 import Cardano.Faucet.Web
@@ -153,7 +154,7 @@ deriveSingleKey ::
 deriveSingleKey net acctK stakeIndex = (stake_skey, y, x)
   where
     stakeK = accountKeyToStakeKey acctK stakeIndex
-    stake_skey = StakeExtendedSigningKey $ getKey stakeK
+    stake_skey = toStakeSigningKey $ getKey stakeK
     stake_vkey = getVerificationKey stake_skey
     stake_vkey_hash = verificationKeyHash $ castVerificationKey stake_vkey
     y = StakeCredentialByKey stake_vkey_hash
@@ -338,7 +339,7 @@ newFaucetState fsConfig fsTxQueue = do
   let
     fsAcctKey = rootKeytoAcctKey fsRootKey 0x80000000
     addrK = accountKeyToPaymentKey fsAcctKey (fcfAddressIndex fsConfig)
-    pay_skey = PaymentExtendedSigningKey $ getKey addrK
+    pay_skey = toPaymentSigningKey $ getKey addrK
     pay_vkey = getVerificationKey pay_skey
     fsPaymentSkey = WitnessPaymentExtendedKey pay_skey
     fsPaymentVkey = pay_vkey

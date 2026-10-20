@@ -19,7 +19,7 @@ import Cardano.Address.Derivation (Depth (PolicyK), XPrv)
 import Cardano.Address.Style.Shelley (Shelley, getKey)
 import Cardano.Api hiding (Header)
 import Cardano.Api.Experimental.Certificate (PoolId)
-import Cardano.Api.Experimental.Certificate qualified as ExpCert
+import Cardano.Api.Compatible.Certificate qualified as CompatCert
 import Cardano.Api.Experimental.Tx qualified as Exp
 import Cardano.Api.Ledger qualified as L
 import Cardano.CLI.Type.Common
@@ -50,6 +50,7 @@ import Cardano.Faucet.Types (
   keyFingerprint,
   maskForRateLimit,
   rootKeyToPolicyKey,
+  toPaymentSigningKey,
  )
 import Cardano.Faucet.Utils (computeUtxoStats, findUtxoOfSize, prettyFriendlyTx)
 import Cardano.Prelude hiding ((%))
@@ -297,7 +298,7 @@ getTokenState policy_index name FaucetState {fsRootKey} = TokenState {tsAssetId,
     policyKey :: Shelley 'PolicyK XPrv
     policyKey = rootKeyToPolicyKey fsRootKey (0x8000_0000 + policy_index)
     tsPolicySKey :: SigningKey PaymentExtendedKey
-    tsPolicySKey = PaymentExtendedSigningKey $ getKey policyKey
+    tsPolicySKey = toPaymentSigningKey $ getKey policyKey
     policy_vkey :: VerificationKey PaymentExtendedKey
     policy_vkey = getVerificationKey tsPolicySKey
     simpleScript :: SimpleScript
@@ -437,19 +438,14 @@ handleDelegateStake
         Right ((stake_skey, creds), txinout) -> do
           let
             poolKeyHash :: L.KeyHash L.StakePool = unStakePoolKeyHash poolId
-            expCert =
-              caseShelleyToBabbageOrConwayEraOnwards
-                ( \_ ->
-                    let ledgerCert = L.mkDelegStakeTxCert (toShelleyStakeCredential creds) (unStakePoolKeyHash poolId)
-                     in ExpCert.Certificate ledgerCert
-                )
-                ( \case
-                    ConwayEraOnwardsConway ->
-                      ExpCert.Certificate $ L.mkDelegTxCert (toShelleyStakeCredential creds) (L.DelegStake poolKeyHash)
-                    ConwayEraOnwardsDijkstra ->
-                      ExpCert.Certificate $ L.mkDelegTxCert (toShelleyStakeCredential creds) (L.DelegStake poolKeyHash)
-                )
-                sbe
+            expCert = case sbe of
+              ShelleyBasedEraShelley -> CompatCert.makeStakeAddressDelegationCertificate @ShelleyEra creds poolId
+              ShelleyBasedEraAllegra -> CompatCert.makeStakeAddressDelegationCertificate @AllegraEra creds poolId
+              ShelleyBasedEraMary -> CompatCert.makeStakeAddressDelegationCertificate @MaryEra creds poolId
+              ShelleyBasedEraAlonzo -> CompatCert.makeStakeAddressDelegationCertificate @AlonzoEra creds poolId
+              ShelleyBasedEraBabbage -> CompatCert.makeStakeAddressDelegationCertificate @BabbageEra creds poolId
+              ShelleyBasedEraConway -> CompatCert.makeStakeAddressDelegationCertificate @ConwayEra creds (L.DelegStake poolKeyHash)
+              ShelleyBasedEraDijkstra -> CompatCert.makeStakeAddressDelegationCertificate @DijkstraEra creds (L.DelegStake poolKeyHash)
             stake_witness = WitnessStakeExtendedKey stake_skey
           (signedTx, txid) <-
             makeAndSignTx
