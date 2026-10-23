@@ -26,12 +26,12 @@
     };
   };
 
-  outputs = {flake-parts, treefmt, ...} @ inputs:
-    flake-parts.lib.mkFlake {inherit inputs;} ({
-      flake-parts-lib,
-      lib,
-      ...
-    }: {
+  outputs = {
+    flake-parts,
+    treefmt,
+    ...
+  } @ inputs:
+    flake-parts.lib.mkFlake {inherit inputs;} ({...}: {
       imports = [
         treefmt.flakeModule
 

@@ -68,9 +68,9 @@
       # package customizations as needed. Where cabal.project is not
       # specific enough, or doesn't allow setting these.
       modules = [
-        ({pkgs, ...}: {
+        {
           packages.cardano-faucet.configureFlags = ["--ghc-option=-Werror"];
-        })
+        }
       ];
     };
 

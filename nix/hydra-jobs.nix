@@ -3,7 +3,7 @@
   lib,
   ...
 }:
-# For motivation/inspiration, see: 
+# For motivation/inspiration, see:
 #  * https://github.com/hercules-ci/flake-parts/issues/376
 #  * https://github.com/TeaClientMC/Registry/blob/master/hydraJobs.nix
 flake-parts-lib.mkTransposedPerSystemModule {
