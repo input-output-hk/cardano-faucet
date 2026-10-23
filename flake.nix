@@ -3,8 +3,6 @@
 
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";
-    flake-utils.url = "github:hamishmack/flake-utils/hkm/nested-hydraJobs";
-    incl.url = "github:divnix/incl";
     treefmt.url = "github:numtide/treefmt-nix";
     nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
 
@@ -31,7 +29,7 @@
     treefmt,
     ...
   } @ inputs:
-    flake-parts.lib.mkFlake {inherit inputs;} ({...}: {
+    flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
         treefmt.flakeModule
 
@@ -45,12 +43,10 @@
 
       systems = [
         "x86_64-linux"
-        # disabling to reduce CI time initially. Uncomment later
-        #"x86_64-darwin"
-        #"aarch64-linux"
-        #"aarch64-darwin"
+        "aarch64-linux"
+        "aarch64-darwin"
       ];
-    });
+    };
 
   nixConfig = {
     extra-substituters = [
