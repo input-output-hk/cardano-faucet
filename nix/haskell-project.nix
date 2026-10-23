@@ -90,12 +90,19 @@
           };
       };
   in {
-    inherit (flake) checks apps;
+    inherit (flake) checks;
     inherit hydraJobs;
+
+    apps =
+      flake.apps
+      // {
+        default = flake.apps."cardano-faucet:exe:cardano-faucet";
+      };
 
     packages =
       flake.packages
       // {
+        default = flake.packages."cardano-faucet:exe:cardano-faucet";
         project = cabalProject;
       };
 
