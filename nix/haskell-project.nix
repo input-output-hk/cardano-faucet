@@ -50,14 +50,15 @@
           statix # nix static analysis
           deadnix # nix dead-code-detector
 
-          # Required to ledger/consensus
-          liburing
-          lmdb
+          lmdb # Required by ouroboros-consensus
 
           # Other useful tools
           gh
           jq
           yq-go
+        ] ++ lib.optionals (lib.hasSuffix "-linux" system) [
+          # io_uring is linux-only
+          liburing # For ouroboros-consensus' LSM backend
         ];
 
         # disable Hoogle until someone request it
