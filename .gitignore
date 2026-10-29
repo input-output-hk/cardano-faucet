@@ -1,3 +1,4 @@
+# Haskell
 .ghc.environment.*
 .nix-shell-cabal.project
 /cabal.project.diff
@@ -7,5 +8,10 @@
 dist-newstyle/
 dist-profiled/
 dist/
+
+# Nix
 result*
 .direnv
+
+# Agents
+specs
