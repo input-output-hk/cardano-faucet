@@ -5,6 +5,8 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     treefmt.url = "github:numtide/treefmt-nix";
     nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
+    cardano-parts.url = "github:input-output-hk/cardano-parts";
+    cardano-playground.url = "github:input-output-hk/cardano-playground";
 
     haskell-nix = {
       url = "github:input-output-hk/haskell.nix";
@@ -25,6 +27,7 @@
   };
 
   outputs = {
+    cardano-parts,
     flake-parts,
     treefmt,
     ...
@@ -37,6 +40,8 @@
         ./nix/hydra-jobs.nix
         # Project builds via haskell.nix
         ./nix/haskell-project.nix
+        # Local testnet tooling
+        ./nix/cardano-testnet.nix
         # Source code formatters via treefmt
         ./nix/formatter.nix
       ];
