@@ -28,7 +28,6 @@ common project-config
 
   ghc-options:          -Wall
                         -Wcompat
-                        -Werror
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
                         -Wpartial-fields
@@ -36,10 +35,6 @@ common project-config
                         -Wunused-packages
                         -Wno-orphans
                         -Wno-deprecations
-
-common maybe-unix
-  if !os(windows)
-     build-depends:    unix
 
 library
   import:               base, project-config

@@ -1,170 +1,52 @@
 {
-  description = "cardano-faucet";
+  description = "Faucet service providing test ada on Cardano testnets";
 
   inputs = {
-    haskellNix.url = "github:input-output-hk/haskell.nix";
-    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
-    iohkNix.url = "github:input-output-hk/iohk-nix";
-    incl.url = "github:divnix/incl";
-    flake-utils.url = "github:hamishmack/flake-utils/hkm/nested-hydraJobs";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    treefmt.url = "github:numtide/treefmt-nix";
+    nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
 
-    CHaP.url = "github:IntersectMBO/cardano-haskell-packages?ref=repo";
-    CHaP.flake = false;
+    haskell-nix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.hackage.follows = "hackage-nix";
+    };
+    hackage-nix = {
+      url = "github:input-output-hk/hackage.nix";
+      flake = false;
+    };
+    iohk-nix = {
+      url = "github:input-output-hk/iohk-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    chap = {
+      url = "github:IntersectMBO/cardano-haskell-packages?ref=repo";
+      flake = false;
+    };
   };
 
-  outputs = inputs: let
-    supportedSystems = [
-      "x86_64-linux"
-      # disabling to reduce CI time initially. Uncomment later
-      #"x86_64-darwin"
-      #"aarch64-linux"
-      #"aarch64-darwin"
-    ];
-  in
-    {inherit (inputs) incl;}
-    // inputs.flake-utils.lib.eachSystem supportedSystems (
-      system: let
-        # Setup our nixpkgs with the haskell.nix overlays, and the iohk-nix
-        # overlays...
-        nixpkgs = import inputs.nixpkgs {
-          overlays = [
-            # iohkNix.overlays.crypto provide libsodium-vrf, libblst and libsecp256k1.
-            inputs.iohkNix.overlays.crypto
-            # haskellNix.overlay can be configured by later overlays, so need to come before them.
-            inputs.haskellNix.overlay
-            # configure haskell.nix to use iohk-nix crypto librairies.
-            inputs.iohkNix.overlays.haskell-nix-crypto
-          ];
-          inherit system;
-          inherit (inputs.haskellNix) config;
-        };
-        inherit (nixpkgs) lib;
+  outputs = {
+    flake-parts,
+    treefmt,
+    ...
+  } @ inputs:
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      imports = [
+        treefmt.flakeModule
 
-        # We use cabalProject' to ensure we don't build the plan for
-        # all systems.
-        cabalProject = nixpkgs.haskell-nix.cabalProject' ({config, ...}: {
-          src = ./.;
-          name = "cardano-faucet";
-          compiler-nix-name = lib.mkDefault "ghc96";
+        # Add hydraJobs to perSystem
+        ./nix/hydra-jobs.nix
+        # Project builds via haskell.nix
+        ./nix/haskell-project.nix
+        # Source code formatters via treefmt
+        ./nix/formatter.nix
+      ];
 
-          # We also want cross compilation to windows on linux (and only with default compiler).
-          # TODO: re-enable cross once mingw32 build isn't missing attribute `alex` at the latest haskellNix pin
-          # crossPlatforms = p:
-          #   lib.optional (system == "x86_64-linux" && config.compiler-nix-name == defaultCompiler)
-          #   p.mingwW64;
-
-          # CHaP input map, so we can find CHaP packages (needs to be more
-          # recent than the index-state we set!). Can be updated with
-          #
-          #  nix flake lock --update-input CHaP
-          #
-          inputMap = {
-            "https://chap.intersectmbo.org/" = inputs.CHaP;
-          };
-          # tools we want in our shell, from hackage
-          shell.tools =
-            {
-              cabal = "3.12.1.0";
-              fourmolu = "0.14.0.0";
-              ghcid = "0.8.9";
-              haskell-language-server.src = nixpkgs.haskell-nix.sources."hls-2.12";
-              hlint = "3.8";
-              # TODO[sgillespie]: Why do we need fourmolu and stylish-haskell?
-              stylish-haskell = "0.14.6.0";
-            };
-          # and from nixpkgs or other inputs
-          shell.nativeBuildInputs = with nixpkgs; [ gh jq yq-go ];
-          # disable Hoogle until someone request it
-          # Disabled: GHC 9.6.7 haddock panics on ouroboros-network-1.1.0.0 BigLedgerPeers
-          shell.withHoogle = false;
-          # Skip cross compilers for the shell
-          shell.crossPlatforms = _: [];
-
-          # package customizations as needed. Where cabal.project is not
-          # specific enough, or doesn't allow setting these.
-          modules = [
-            ({pkgs, ...}: {
-              packages.cardano-faucet.configureFlags = ["--ghc-option=-Werror"];
-              packages.cardano-faucet.components.tests.cardano-faucet-test.build-tools =
-                with pkgs.buildPackages; [ jq coreutils shellcheck ];
-              packages.cardano-faucet.components.tests.cardano-faucet-golden.build-tools =
-                with pkgs.buildPackages; [ jq coreutils shellcheck ];
-            })
-            ({
-              pkgs,
-              config,
-              ...
-            }: let
-              exportCliPath = "export CARDANO_CLI=${config.hsPkgs.cardano-faucet.components.exes.cardano-faucet}/bin/cardano-faucet${pkgs.stdenv.hostPlatform.extensions.executable}";
-              mainnetConfigFiles = [
-                "configuration/cardano/mainnet-config.yaml"
-                "configuration/cardano/mainnet-config.json"
-                "configuration/cardano/mainnet-byron-genesis.json"
-                "configuration/cardano/mainnet-shelley-genesis.json"
-                "configuration/cardano/mainnet-alonzo-genesis.json"
-                "configuration/cardano/mainnet-conway-genesis.json"
-              ];
-            in {
-              # cardano-faucet tests depend on cardano-faucet and some config files:
-              packages.cardano-faucet.components.tests.cardano-faucet-golden.preCheck = let
-                # This define files included in the directory that will be passed to `H.getProjectBase` for this test:
-                filteredProjectBase = inputs.incl ./. [
-                  "cabal.project"
-                  "scripts/plutus/scripts/v1/custom-guess-42-datum-42.plutus"
-                ];
-              in ''
-                ${exportCliPath}
-                cp -r ${filteredProjectBase}/* ..
-              '';
-              packages.cardano-faucet.components.tests.cardano-faucet-test.preCheck = let
-                # This define files included in the directory that will be passed to `H.getProjectBase` for this test:
-                filteredProjectBase = inputs.incl ./. mainnetConfigFiles;
-              in ''
-                ${exportCliPath}
-                cp -r ${filteredProjectBase}/* ..
-              '';
-            })
-            {
-               packages.crypton-x509-system.postPatch = ''
-                  substituteInPlace crypton-x509-system.cabal --replace 'Crypt32' 'crypt32'
-               '';
-            }
-          ];
-        });
-        # ... and construct a flake from the cabal project
-        flake = cabalProject.flake {};
-      in
-        lib.recursiveUpdate flake rec {
-          project = cabalProject;
-          # add a required job, that's basically all hydraJobs.
-          hydraJobs =
-            nixpkgs.callPackages inputs.iohkNix.utils.ciJobsAggregates
-            {
-              ciJobs =
-                flake.hydraJobs
-                // {
-                  # This ensure hydra send a status for the required job (even if no change other than commit hash)
-                  revision = nixpkgs.writeText "revision" (inputs.self.rev or "dirty");
-                };
-            };
-          legacyPackages = rec {
-            inherit cabalProject nixpkgs;
-            # also provide hydraJobs through legacyPackages to allow building without system prefix:
-            inherit hydraJobs;
-            # expose cardano-faucet binary at top-level
-            cardano-faucet = cabalProject.hsPkgs.cardano-faucet.components.exes.cardano-faucet;
-          };
-          devShells = let
-            profillingShell = p: {
-              # `nix develop .#profiling` (or `.#ghc927.profiling): a shell with profiling enabled
-              profiling = (p.appendModule {modules = [{enableLibraryProfiling = true;}];}).shell;
-            };
-          in
-            profillingShell cabalProject;
-          # formatter used by nix fmt
-          formatter = nixpkgs.alejandra;
-        }
-    );
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
+    };
 
   nixConfig = {
     extra-substituters = [

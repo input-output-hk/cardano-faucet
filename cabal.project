@@ -1,4 +1,4 @@
--- run `nix flake lock --update-input hackage` after updating index-state.
+-- run `nix flake lock --update-input hackage-nix chap` after updating index-state.
 repository cardano-haskell-packages
   url: https://chap.intersectmbo.org/
   secure: True
@@ -10,8 +10,6 @@ repository cardano-haskell-packages
     c00aae8461a256275598500ea0e187588c35a5d5d7454fb57eac18d9edb86a56
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
--- See CONTRIBUTING for information about these, including some Nix commands
--- you need to run if you change them
 index-state:
   , hackage.haskell.org 2026-03-26T20:21:33Z
   , cardano-haskell-packages 2026-05-02T16:21:41Z
@@ -44,11 +42,3 @@ package snap-server
 package comonad
   flags: -test-doctests
 
-if os(windows)
-  -- Avoid `unknown symbol __cpu_model` when cross compilation runs TH code
-  package bitvec
-    flags: -simd
-
--- IMPORTANT
--- Do NOT add more source-repository-package stanzas here unless they are strictly
--- temporary! Please read the section in CONTRIBUTING about updating dependencies.
