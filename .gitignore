@@ -13,5 +13,9 @@ dist/
 result*
 .direnv
 
+# Testnet
+testnet
+testnet-faucet
+
 # Agents
 specs
