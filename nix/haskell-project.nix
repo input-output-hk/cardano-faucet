@@ -14,6 +14,7 @@
   ];
 
   perSystem = {
+    config,
     lib,
     pkgs,
     ...
@@ -45,21 +46,27 @@
         };
 
         # and from nixpkgs or other inputs
-        nativeBuildInputs = with pkgs; [
-          alejandra # nix formatter
-          statix # nix static analysis
-          deadnix # nix dead-code-detector
+        nativeBuildInputs = with pkgs;
+          [
+            alejandra # nix formatter
+            statix # nix static analysis
+            deadnix # nix dead-code-detector
 
-          lmdb # Required by ouroboros-consensus
+            lmdb # Required by ouroboros-consensus
 
-          # Other useful tools
-          gh
-          jq
-          yq-go
-        ] ++ lib.optionals (lib.hasSuffix "-linux" system) [
-          # io_uring is linux-only
-          liburing # For ouroboros-consensus' LSM backend
-        ];
+            # Other useful tools
+            gh
+            jq
+            yq-go
+          ]
+          ++ lib.optionals (lib.hasSuffix "-linux" system) [
+            # io_uring is linux-only
+            liburing # For ouroboros-consensus' LSM backend
+          ]
+          ++ lib.optionals (system == "x86_64-linux") [
+            # cardano-parts is x86_64-linux only
+            config.packages.cardano-testnet-env # cardano-testnet and faucet utilities
+          ];
 
         withHoogle = true;
       };
@@ -72,13 +79,13 @@
         }
 
         {
-          # GHC 9.6.7 panics when building Haddock docs for some Cardano packages, so 
+          # GHC 9.6.7 panics when building Haddock docs for some Cardano packages, so
           # disable it for now:
           #
           # panic! (the 'impossible' happened)
           #   GHC version 9.6.7:
           #         tyConStupidTheta
-          # 
+          #
           # BigLedgerPeers
           # Call stack:
           #     CallStack (from HasCallStack):
