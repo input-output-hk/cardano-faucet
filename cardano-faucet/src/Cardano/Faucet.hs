@@ -21,6 +21,7 @@ import Cardano.Api (
   BlockInMode,
   ChainPoint,
   File (File),
+  InAnyShelleyBasedEra (..),
   LocalChainSyncClient (NoLocalChainSyncClient),
   LocalNodeClientProtocols (
     LocalNodeClientProtocols,
@@ -44,6 +45,7 @@ import Cardano.Api (
   UTxO (unUTxO),
   connectToLocalNode,
   getVerificationKey,
+  inAnyShelleyBasedEra,
   serialiseAddress,
  )
 import Cardano.Api.Byron ()
@@ -83,6 +85,7 @@ import Cardano.Faucet.Types (
 import Cardano.Faucet.Utils
 import Cardano.Faucet.Web
 import Cardano.Prelude hiding ((%))
+import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (
   TMVar,
   TQueue,
@@ -91,6 +94,7 @@ import Control.Concurrent.STM (
   newTQueueIO,
   putTMVar,
   readTQueue,
+  takeTMVar,
   tryTakeTMVar,
  )
 import Control.Monad.Trans.Except.Extra (left)
@@ -407,10 +411,10 @@ queryStakeKeyLoop era network manyStakeKeys debug faucetState initial = do
 
 queryClient ::
   FaucetConfigFile ->
+  TMVar (InAnyShelleyBasedEra FaucetState) ->
   TQueue (TxInMode, ByteString, TxId) ->
-  Port ->
   Net.Query.LocalStateQueryClient BlockInMode ChainPoint QueryInMode IO ()
-queryClient config txQueue port = LocalStateQueryClient $ do
+queryClient config stateVar txQueue = LocalStateQueryClient $ do
   aquireConnection $ do
     runQueryThen QueryCurrentEra $ \(AnyCardanoEra era) -> do
       case cardanoEraToShelleyBasedEra era of
@@ -419,9 +423,7 @@ queryClient config txQueue port = LocalStateQueryClient $ do
           eFaucetState <- liftIO $ runExceptT $ newFaucetState config txQueue
           let
             faucetState = fromRight (Prelude.error "cant create state") eFaucetState
-          putStrLn $ format ("lovelace values for api keys " % sh) $ fsBucketSizes faucetState
-          putStrLn $ "faucet address: " <> serialiseAddress (fsOwnAddress faucetState)
-          _child <- forkIO $ startApiServer sbe faucetState port
+          atomically $ putTMVar stateVar (inAnyShelleyBasedEra sbe faucetState)
           runQueryThen (getUtxoQuery sbe (fsOwnAddress faucetState)) $ \case
             Right result -> do
               let
@@ -472,32 +474,65 @@ readEnvSocketPath = do
 
 main :: IO ()
 main = do
+  -- By default, GHC uses block buffering when stdout isn't a terminal (ie, systemd).
+  -- Force line buffering to keep logs up-to-date.
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
   fsTxQueue <- newTQueueIO
-  dryRun <- maybe False (== "1") <$> lookupEnv "DRY_RUN"
-  eResult <- runExceptT $ do
-    configFilePath <- liftIO $ lookupEnv "CONFIG_FILE"
-    mportString <- liftIO $ lookupEnv "PORT"
-    let
-      portString = fromMaybe "8090" mportString
-      port = Prelude.read portString
-    bar <- unmaybe configFilePath
-    fsConfig <- parseConfig bar
+
+  -- Look up runtime configuration
+  dryRun <- (== Just "1") <$> lookupEnv "DRY_RUN"
+  portStr <- fromMaybe "8090" <$> lookupEnv "PORT"
+  configFilePath <- lookupEnv "CONFIG_FILE"
+  -- $PORT has a default, but a specified value can still contain nonsense
+  -- (eg, "bogus-port"), so we still have to validate it.
+  let port =
+        fromMaybe
+          (panic $ "invalid $PORT: " <> toText portStr)
+          (readMaybe portStr)
+
+  -- To calculate the faucet state, we have to query the current node's era, so we pass
+  -- this to query client. The API server waits for it to be filled before starting.
+  stateVar <- newEmptyTMVarIO
+
+  result <- runExceptT $ do
+    -- Parse the config file, an error is returned if $CONFIG_FILE is not set.
+    configFile <- unmaybe configFilePath
+    fsConfig <- parseConfig configFile
+
     Right sockPath <- liftIO readEnvSocketPath
     let
       localNodeConnInfo :: LocalNodeConnectInfo
-      localNodeConnInfo = LocalNodeConnectInfo defaultCModeParams (fcfNetwork fsConfig) (File sockPath)
+      localNodeConnInfo =
+        LocalNodeConnectInfo
+          defaultCModeParams
+          (fcfNetwork fsConfig)
+          (File sockPath)
 
-    liftIO
-      $ connectToLocalNode
-        localNodeConnInfo
-        LocalNodeClientProtocols
-          { localChainSyncClient = NoLocalChainSyncClient
-          , localStateQueryClient = Just (queryClient fsConfig fsTxQueue port)
-          , localTxSubmissionClient = Just (submissionClient dryRun fsTxQueue)
-          , localTxMonitoringClient = Just (txMonitor fsConfig)
-          }
-  case eResult of
-    Right msg -> print msg
-    Left err -> putStrLn $ renderFaucetError err
+      runNodeClient :: IO ()
+      runNodeClient =
+        connectToLocalNode
+          localNodeConnInfo
+          LocalNodeClientProtocols
+            { localChainSyncClient = NoLocalChainSyncClient
+            , localStateQueryClient = Just (queryClient fsConfig stateVar fsTxQueue)
+            , localTxSubmissionClient = Just (submissionClient dryRun fsTxQueue)
+            , localTxMonitoringClient = Just (txMonitor fsConfig)
+            }
+
+      runApiServer :: IO ()
+      runApiServer = do
+        InAnyShelleyBasedEra era faucetState <- atomically $ takeTMVar stateVar
+        putStrLn $ format ("lovelace values for api keys " % sh) $ fsBucketSizes faucetState
+        putStrLn $ "faucet address: " <> serialiseAddress (fsOwnAddress faucetState)
+        startApiServer era faucetState port
+
+    -- Orchestrate node client and API server in separate threads. If either aborts, the
+    -- other one exits.
+    liftIO $
+      mapConcurrently_ identity
+        [ runNodeClient
+        , runApiServer
+        ]
+
+  either (putStrLn . renderFaucetError) pure result

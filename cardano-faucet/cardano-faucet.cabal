@@ -55,6 +55,7 @@ library
 
   build-depends:        aeson              >= 2
                       , aeson-pretty
+                      , async
                       , MissingH
                       , bytestring
                       , cardano-addresses  >= 4
