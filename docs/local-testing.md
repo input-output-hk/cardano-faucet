@@ -32,7 +32,8 @@ Launch a local cluster:
 
 ```
 rm -rf testnet
-cardano-testnet cardano --params-mainnet
+CARDANO_NODE="$(which cardano-node)" CARDANO_CLI="$(which cardano-cli)" \
+    cardano-testnet cardano --params-mainnet
 ```
 
 You should now have a local testnet cluster running in `testnet/`. In another terminal
