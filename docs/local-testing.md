@@ -27,20 +27,18 @@ You will also need `cardano-cli` and `cardano-testnet` applications included in 
 
 ## Create a Local Testnet
 
-
 Launch a local cluster:
 
 ```
 rm -rf testnet
-cardano-testnet cardano --params-mainnet
+CARDANO_NODE="$(which cardano-node)" CARDANO_CLI="$(which cardano-cli)" \
+    cardano-testnet cardano --params-mainnet
 ```
 
 You should now have a local testnet cluster running in `testnet/`. In another terminal
 session, define environment variables for the faucet and funding scripts:
 
 ```
-export CARDANO_NODE="$(which cardano-node)"
-export CARDANO_CLI="$(which cardano-cli)"
 export CONFIG_FILE=./testnet-faucet/faucet-config.json
 export CARDANO_NODE_SOCKET_PATH=./testnet/socket/node1/sock
 export CARDANO_NODE_NETWORK_ID=42
@@ -110,14 +108,17 @@ Create the Faucet configuration file to `testnet-faucet/faucet-config.json`:
   "network": {
     "Testnet": 42
   },
-  "recaptcha_site_key": "$RECAPTCHA_SITE_KEY",
-  "recaptcha_secret_key": "$RECAPTCHA_SECRET_KEY",
+  "recaptcha_site_key": "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
+  "recaptcha_secret_key": "6LeIxAcTAAAAAGG-zFI1TnRWxMZNFuojJ4WifJWe",
   "allowed_cors_origins": [
     "http://localhost:8090"
   ],
   "address_index": 0
 }
 ```
+
+Note: The reCAPTCHA keys above are Google's public
+[test keys](https://developers.google.com/recaptcha/docs/faq)
 
 Generate a rewards configuration:
 ```
@@ -171,7 +172,7 @@ setup-delegation-accounts \
 Clean up the transaction files:
 
 ```
-rm *.tx* jq pparams.json test.json tmp_utxo.json
+rm -f *.tx* pparams.json tmp_utxo.json
 ```
 
 **NOTE**: `cardano-testnet` has no resume functionality, so you will start it from scratch
@@ -183,9 +184,9 @@ Make sure environment variables are defined that point to the `cardano-node` and
 `cardano-cli` executables:
 
 ```
-export CARDANO_NODE="$(which cardano-node)"
-export CARDANO_CLI="$(which cardano-cli)"
 export CONFIG_FILE=./testnet-faucet/faucet-config.json
+export CARDANO_NODE_SOCKET_PATH=./testnet/socket/node1/sock
+export CARDANO_NODE_NETWORK_ID=42
 ```
 
 Start Faucet:
@@ -210,3 +211,32 @@ Alternatively, `curl` can be used, for example:
 ```
 curl -v -XPOST "http://localhost:8090/send-money?address=$SEND_ADDRESS&api_key=$API_KEY"
 ```
+
+## Test Faucet
+
+Generate a recipient address:
+
+```
+cardano-cli latest address key-gen \
+    --verification-key-file testnet-faucet/recipient.vkey \
+    --signing-key-file testnet-faucet/recipient.skey
+cardano-cli latest address build \
+    --payment-verification-key-file testnet-faucet/recipient.vkey \
+    --testnet-magic 42 \
+    --out-file testnet-faucet/recipient.addr
+```
+
+Open the [faucet web interface](http://localhost:8090/basic-faucet). To send funds, use:
+
+ * `address(required)`: Contents of `testnet-faucet/reciepient.addr`
+ * `api key(optional)`: Contents of `testnet-faucet/api.key`
+
+Verify funds were transferred:
+
+```
+cardano-cli latest query utxo \
+    --address "$(<testnet-faucet/recipient.addr)" \
+    --socket-path ./testnet/socket/node1/sock \
+    --testnet-magic 42
+```
+
