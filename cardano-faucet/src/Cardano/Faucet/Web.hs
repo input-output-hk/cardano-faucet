@@ -1,19 +1,12 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest (..)) where
+module Cardano.Faucet.Web (userAPI, server, SiteVerifyRequest (..), checkRateLimits) where
 
 import Cardano.Address.Derivation (Depth (PolicyK), XPrv)
 import Cardano.Address.Style.Shelley (Shelley, getKey)
@@ -26,7 +19,6 @@ import Cardano.CLI.Type.Common
 import Cardano.Faucet.Misc (faucetValueToLovelace, parseAddress, stripMintingTokens, toFaucetValue)
 import Cardano.Faucet.TxUtils (Fee (..), makeAndSignTx)
 import Cardano.Faucet.Types (
-  ApiKey (..),
   ApiKeyValue (..),
   CaptchaToken,
   DelegationReply (..),
@@ -38,11 +30,9 @@ import Cardano.Faucet.Types (
   ForwardedFor (..),
   RateLimitAddress (..),
   RateLimitResult (..),
-  SecretKey,
   SendMoneyReply (..),
   SendMoneySent (..),
   SiteKey (..),
-  SiteVerifyReply (..),
   SiteVerifyRequest (..),
   UtxoStats (..),
   describeApiKey,
@@ -52,6 +42,7 @@ import Cardano.Faucet.Types (
   rootKeyToPolicyKey,
  )
 import Cardano.Faucet.Utils (computeUtxoStats, findUtxoOfSize, prettyFriendlyTx)
+import Cardano.Faucet.Web.Auth (checkRateLimits, ApiKeyProtected, decideBetweenKeyAndCaptcha)
 import Cardano.Prelude hiding ((%))
 import Control.Concurrent.STM (TMVar, putTMVar, readTMVar, takeTMVar, writeTQueue)
 import Data.Aeson (eitherDecode)
@@ -61,26 +52,13 @@ import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LT
-import Data.Time.Clock (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
+import Data.Time.Clock (getCurrentTime)
 import Formatting (format, sformat, (%))
 import Formatting.ShortFormatters hiding (b, f, l, x)
-import Network.HTTP.Client.TLS (newTlsManagerWith, tlsManagerSettings)
 import Network.HTTP.Media.MediaType ((//), (/:))
 import Network.Socket (SockAddr (SockAddrInet, SockAddrInet6))
 import Protolude (print)
 import Servant
-import Servant.Client (
-  BaseUrl (BaseUrl),
-  ClientError,
-  ClientM,
-  Scheme (Https),
-  client,
-  mkClientEnv,
-  runClientM,
- )
-
--- create recaptcha api keys at https://www.google.com/recaptcha/admin
--- reCAPTCHA v2, "i am not a robot"
 
 instance FromHttpApiData PoolId where
   parseUrlPiece input = either (Left . T.pack) Right $ eitherDecode (LBS.fromStrict $ encodeUtf8 $ "\"" <> input <> "\"")
@@ -91,14 +69,6 @@ instance Accept HTML where
 
 instance MimeRender HTML Text where
   mimeRender _ = LT.encodeUtf8 . LT.fromStrict
-
-type ApiKeyProtected rest =
-  QueryParam' '[Optional] "api_key" Text
-    :> QueryParam' '[Optional] "g-recaptcha-response" CaptchaToken
-    :> RemoteHost
-    :> Header "X-Forwarded-For" ForwardedFor
-    :> Header "Origin" Text
-    :> rest
 
 type SendMoneyUrl =
   "send-money"
@@ -132,13 +102,6 @@ type MintCoins =
     :> QueryParam' '[Required] "tokens_per_utxo" Integer
     :> Get '[JSON] (Either FaucetWebError ())
 
-type SiteVerify =
-  "recaptcha"
-    :> "api"
-    :> "siteverify"
-    :> ReqBody '[FormUrlEncoded] SiteVerifyRequest
-    :> Post '[JSON] SiteVerifyReply
-
 type GetSiteKey = "get-site-key" :> Get '[PlainText] Text
 
 type GetBasicFaucet = "basic-faucet" :> Get '[HTML] Text
@@ -154,24 +117,8 @@ type RootDir =
     :<|> GetBasicFaucet
     :<|> MintCoins
 
--- recaptcha root dir
-type CaptchaRootDir = SiteVerify
-
 userAPI :: Proxy RootDir
 userAPI = Proxy
-
-recaptchaApi :: Proxy CaptchaRootDir
-recaptchaApi = Proxy
-
-siteVerify :: SiteVerifyRequest -> ClientM SiteVerifyReply
-siteVerify = client recaptchaApi
-
-doSiteVerify :: SecretKey -> CaptchaToken -> IO (Either ClientError SiteVerifyReply)
-doSiteVerify secret token = do
-  manager' <- newTlsManagerWith tlsManagerSettings
-  runClientM
-    (siteVerify $ SiteVerifyRequest secret token Nothing)
-    (mkClientEnv manager' (BaseUrl Https "www.google.com" 443 ""))
 
 server ::
   ShelleyBasedEra era ->
@@ -405,7 +352,7 @@ handleDelegateStake
       when (isNothing (fcfMaxStakeKeyIndex fsConfig)) $ left $ FaucetWebErrorTodo "delegation disabled"
       mReply <- liftIO $ decideBetweenKeyAndCaptcha Nothing mApiKey mToken fsConfig
       (key, limits) <- case mReply of
-        Just (_, ApiKeyValue _ _ _ _ False) -> left FaucetWebErrorKeyCantDelegate
+        Just (_, ApiKeyValue {akvCanDelegate = False}) -> left FaucetWebErrorKeyCantDelegate
         Just x -> pure x
         Nothing -> do
           liftIO $ logRejectedApiKey clientIP mApiKey
@@ -420,7 +367,7 @@ handleDelegateStake
                 [RateLimitAddressPool poolId, RateLimitAddressNetwork (maskForRateLimit clientIP)]
                 key
                 fsDelegationRateLimitState
-                limits
+                (akvDelegationRateLimit limits)
             case limitResult of
               RateLimitResultAllow -> do
                 -- the rate limits allow the action at the current time
@@ -477,73 +424,6 @@ handleDelegateStake
         pure $ corsHeader $ DelegationReplyError err
       Right result -> do
         pure $ corsHeader result
-
-insertUsage ::
-  TMVar (Map ApiKey (Map RateLimitAddress UTCTime)) -> ApiKey -> UTCTime -> RateLimitAddress -> STM ()
-insertUsage tmvar apikey now addr = do
-  mainMap <- takeTMVar tmvar
-  let
-    apiKeyMap :: Map RateLimitAddress UTCTime
-    apiKeyMap = fromMaybe mempty (Map.lookup apikey mainMap)
-    apiKeyMap' :: Map RateLimitAddress UTCTime
-    apiKeyMap' = Map.insert addr now apiKeyMap
-    mainMap' = Map.insert apikey apiKeyMap' mainMap
-  putTMVar tmvar mainMap'
-
--- check the rate limits for the given key, update the tmvar to record the usage of this key, and return if the action is allowed or not
-checkRateLimits ::
-  UTCTime ->
-  [RateLimitAddress] ->
-  ApiKey ->
-  TMVar (Map ApiKey (Map RateLimitAddress UTCTime)) ->
-  ApiKeyValue ->
-  STM RateLimitResult
-checkRateLimits now addresses apikey limitState ApiKeyValue {akvRateLimit} = do
-  mainMap <- readTMVar limitState
-  let
-    -- when many addresses where last used, for the current key
-    apiKeyMap :: Map RateLimitAddress UTCTime
-    apiKeyMap = fromMaybe mempty (Map.lookup apikey mainMap)
-    -- when an address was last used
-    getLastUsage :: RateLimitAddress -> Maybe UTCTime
-    getLastUsage addr' = Map.lookup addr' apiKeyMap
-    lastUsages :: [Maybe UTCTime]
-    lastUsages = map getLastUsage addresses
-    compareTimes :: Maybe UTCTime -> Maybe UTCTime -> Maybe UTCTime
-    compareTimes Nothing Nothing = Nothing
-    compareTimes (Just a) Nothing = Just a
-    compareTimes Nothing (Just b) = Just b
-    compareTimes (Just a) (Just b) = Just (max a b)
-    -- when any of the addresses given, have last been used
-    lastUsage :: Maybe UTCTime
-    lastUsage = Cardano.Prelude.foldl' compareTimes Nothing lastUsages
-    recordUsage :: STM ()
-    recordUsage = do
-      mapM_ (insertUsage limitState apikey now) addresses
-  (allowed, result) <- case lastUsage of
-    Nothing -> do
-      -- this addr has never been used on this api key
-      pure (True, RateLimitResultAllow)
-    Just lastUsed -> do
-      let after = addUTCTime akvRateLimit lastUsed
-      pure
-        $ if now > after
-          then (True, RateLimitResultAllow)
-          else (False, RateLimitResultDeny $ after `diffUTCTime` now)
-  when allowed recordUsage
-  pure result
-
-checkRecaptcha :: SecretKey -> CaptchaToken -> IO Bool
-checkRecaptcha secret token = do
-  res <- doSiteVerify secret token
-  print res
-  case res of
-    (Left _err) -> do
-      pure False
-    (Right (SiteVerifyReply _ts _host)) -> do
-      pure True
-    _ -> do
-      pure False
 
 data MetricValue = MetricValueInt Integer | MetricValueFloat Float | MetricValueStr Text
   deriving (Show)
@@ -667,30 +547,6 @@ pickIp mForwardedFor sockAddr = case mSocketIp of
       SockAddrInet6 _port _flow hostaddr6 _scope -> Just $ fromHostAddress6 hostaddr6
       _ -> Nothing
 
--- if a valid api key is given, return that key and its limits
--- if the apikey is invalid, act like it didnt exist
--- if a recaptcha token exists and is valid, return those limits
--- if all keys are missing or invalid return Nothing
-decideBetweenKeyAndCaptcha ::
-  Maybe Text ->
-  Maybe Text ->
-  Maybe CaptchaToken ->
-  FaucetConfigFile ->
-  IO (Maybe (ApiKey, ApiKeyValue))
-decideBetweenKeyAndCaptcha mType (Just apiKeyText) mToken config@FaucetConfigFile {fcfApiKeys} = case apiKeyText `Map.lookup` fcfApiKeys of
-  -- api key was not valid, just use recaptcha
-  -- TODO, should it give an error instead?
-  Nothing -> decideBetweenKeyAndCaptcha mType Nothing mToken config
-  Just limits -> pure $ Just (ApiKey apiKeyText, limits)
-decideBetweenKeyAndCaptcha mType Nothing (Just token) FaucetConfigFile {fcfRecaptchaSecretKey, fcfRecaptchaLimits} = do
-  let
-    captchaType = fromMaybe "default" mType
-  valid <- checkRecaptcha fcfRecaptchaSecretKey token
-  case (valid, captchaType `Map.lookup` fcfRecaptchaLimits) of
-    (True, Just limits) -> pure $ Just (Recaptcha captchaType, limits)
-    _ -> pure Nothing
-decideBetweenKeyAndCaptcha _ Nothing Nothing _ = pure Nothing
-
 handleSendMoney ::
   ShelleyBasedEra era ->
   FaucetState era ->
@@ -732,7 +588,7 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
               [RateLimitAddressCardano addressAny, RateLimitAddressNetwork (maskForRateLimit clientIP)]
               key
               fsSendMoneyRateLimitState
-              limits
+              (akvRateLimit limits)
           case limitResult of
             RateLimitResultAllow -> do
               txinout <- findUtxoOfSize fsUtxoTMVar withoutMintedTokens

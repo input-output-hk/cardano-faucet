@@ -23,12 +23,17 @@ common base
 common project-config
   default-language:     Haskell2010
 
-  default-extensions:   NoImplicitPrelude
+  default-extensions:   DataKinds
+                        ImportQualifiedPost
+                        NoImplicitPrelude
+                        NumericUnderscores
                         OverloadedStrings
+                        ScopedTypeVariables
+                        TypeApplications
+                        TypeOperators
 
   ghc-options:          -Wall
                         -Wcompat
-                        -Werror
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
                         -Wpartial-fields
@@ -36,10 +41,6 @@ common project-config
                         -Wunused-packages
                         -Wno-orphans
                         -Wno-deprecations
-
-common maybe-unix
-  if !os(windows)
-     build-depends:    unix
 
 library
   import:               base, project-config
@@ -56,10 +57,12 @@ library
                         Cardano.Faucet.Types
                         Cardano.Faucet.Utils
                         Cardano.Faucet.Web
+                        Cardano.Faucet.Web.Auth
                         Paths_cardano_faucet
 
   build-depends:        aeson              >= 2
                       , aeson-pretty
+                      , async
                       , MissingH
                       , bytestring
                       , cardano-addresses  >= 4
