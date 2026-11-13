@@ -109,7 +109,7 @@ Create the Faucet configuration file to `testnet-faucet/faucet-config.json`:
     "Testnet": 42
   },
   "recaptcha_site_key": "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
-  "recaptcha_secret_key": "6LeIxAcTAAAAAGG-zFI1TnRWxMZNFuojJ4WifJWe",
+  "recaptcha_secret_key": "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe",
   "allowed_cors_origins": [
     "http://localhost:8090"
   ],
