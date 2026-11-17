@@ -28,6 +28,7 @@ common project-config
                         NoImplicitPrelude
                         NumericUnderscores
                         OverloadedStrings
+                        RecordWildCards
                         ScopedTypeVariables
                         TypeApplications
                         TypeOperators

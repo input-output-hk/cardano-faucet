@@ -48,6 +48,7 @@ import Cardano.Faucet.Types (
   FaucetError (..),
   FaucetState (..),
   FaucetValue,
+  RateLimitState (..),
   StakeKeyIntermediateState (..),
   StakeKeyState (..),
   accountKeyToPaymentKey,
@@ -140,6 +141,8 @@ main = do
         Api.InAnyShelleyBasedEra era faucetState <- atomically $ STM.takeTMVar stateVar
         putStrLn $ format ("lovelace values for api keys " % sh) $ fsBucketSizes faucetState
         putStrLn $ "faucet address: " <> Api.serialiseAddress (fsOwnAddress faucetState)
+        putStrLn $ "API Key rate limits: " <> show @_ @Text (fcfApiKeys fsConfig)
+        putStrLn $ "reCAPTCHA rate limits: " <> show @_ @Text (fcfRecaptchaLimits fsConfig)
         startApiServer era faucetState port
 
     -- Orchestrate node client and API server in separate threads. If either aborts, the
@@ -284,13 +287,10 @@ getUtxoQuery sbe address = Api.QueryInEra query
 newFaucetState ::
   FaucetConfigFile -> TQueue (TxInMode, ByteString, TxId) -> ExceptT FaucetError IO (FaucetState era)
 newFaucetState fsConfig fsTxQueue = do
-  (fsUtxoTMVar, fsStakeTMVar, fsSendMoneyRateLimitState, fsDelegationRateLimitState) <-
-    liftIO $ (,,,) 
-      <$> STM.newEmptyTMVarIO 
-      <*> STM.newEmptyTMVarIO 
-      <*> STM.newTMVarIO mempty 
-      <*> STM.newTMVarIO mempty
+  fsUtxoTMVar <- liftIO STM.newEmptyTMVarIO
+  fsStakeTMVar <- liftIO STM.newEmptyTMVarIO
   fsRootKey <- mnemonicToRootKey $ fcfMnemonic fsConfig
+  fsRateLimitState <- liftIO $ RateLimitState <$> STM.newTMVarIO mempty <*> STM.newTMVarIO mempty
   let
     fsAcctKey = rootKeytoAcctKey fsRootKey 0x80000000
     addrK = accountKeyToPaymentKey fsAcctKey (fcfAddressIndex fsConfig)

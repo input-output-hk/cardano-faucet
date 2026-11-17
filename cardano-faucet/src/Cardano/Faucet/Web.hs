@@ -27,6 +27,7 @@ import Cardano.Faucet.Types (
   ForwardedFor (..),
   RateLimitAddress (..),
   RateLimitResult (..),
+  RateLimitState (..),
   SendMoneyReply (..),
   SendMoneySent (..),
   SiteKey (..),
@@ -365,7 +366,7 @@ handleDelegateStake
     , fsTxQueue
     , fsStakeTMVar
     , fsConfig
-    , fsDelegationRateLimitState
+    , fsRateLimitState
     , fsOwnAddress
     }
   poolId
@@ -394,7 +395,7 @@ handleDelegateStake
                 now
                 [RateLimitAddressPool poolId, RateLimitAddressNetwork (maskForRateLimit clientIP)]
                 key
-                fsDelegationRateLimitState
+                (rlsDelegation fsRateLimitState)
                 (akvDelegationRateLimit limits)
             case limitResult of
               RateLimitResultAllow -> do
@@ -581,7 +582,7 @@ handleSendMoney ::
   Maybe ForwardedFor ->
   Maybe Text ->
   Servant.Handler (Headers '[Header "Access-Control-Allow-Origin" Text] SendMoneyReply)
-handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsConfig, fsSendMoneyRateLimitState} addr mType mApiKey mToken remoteip mForwardedFor mOrigin = do
+handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsConfig, fsRateLimitState} addr mType mApiKey mToken remoteip mForwardedFor mOrigin = do
   let clientIP = pickIp mForwardedFor remoteip
   eResult <- liftIO $ runExceptT $ do
     addressAny <- parseAddress addr
@@ -610,8 +611,8 @@ handleSendMoney sbe fs@FaucetState {fsUtxoTMVar, fsPaymentSkey, fsTxQueue, fsCon
               now
               [RateLimitAddressCardano addressAny, RateLimitAddressNetwork (maskForRateLimit clientIP)]
               key
-              fsSendMoneyRateLimitState
-              (akvRateLimit limits)
+              (rlsSendMoney fsRateLimitState)
+              (akvRateLimits limits)
           case limitResult of
             RateLimitResultAllow -> do
               txinout <- findUtxoOfSize fsUtxoTMVar withoutMintedTokens

@@ -2,28 +2,59 @@
 
 -- | Authentication/authorization for API keys, reCAPTCHA challenges, and rate-limit
 -- checking.
-module Cardano.Faucet.Web.Auth
-  ( ApiKeyProtected,
-    RecaptchaApi,
-    SiteVerify,
-    SiteVerifyRequest(..),
-    recaptchaApi,
-    siteVerify,
-    runSiteVerify,
-    checkRecaptcha,
-    decideBetweenKeyAndCaptcha,
-    checkRateLimits,
-    insertUsage,
-  ) where
+module Cardano.Faucet.Web.Auth (
+  ApiKeyProtected,
+  RecaptchaApi,
+  SiteVerify,
+  SiteVerifyRequest (..),
+  recaptchaApi,
+  siteVerify,
+  runSiteVerify,
+  checkRecaptcha,
+  decideBetweenKeyAndCaptcha,
+  checkRateLimits,
+) where
 
-import Data.Time (UTCTime, NominalDiffTime, addUTCTime, diffUTCTime)
-import Cardano.Faucet.Types (RateLimitAddress, ApiKey (..), RateLimitResult (..), SiteVerifyRequest(..), SiteVerifyReply (..), CaptchaToken, SecretKey, ForwardedFor, FaucetConfigFile (..), ApiKeyValue)
-import Control.Concurrent.STM (TMVar, readTMVar, takeTMVar, putTMVar)
-import Data.Map.Strict qualified as Map
+import Cardano.Faucet.Types (
+  ApiKey (..),
+  ApiKeyRateLimits (..),
+  ApiKeyValue,
+  CaptchaToken,
+  FaucetConfigFile (..),
+  ForwardedFor,
+  RateLimit (..),
+  RateLimitAddress,
+  RateLimitResult (..),
+  SecretKey,
+  SiteVerifyReply (..),
+  SiteVerifyRequest (..),
+  UsageHistory (..),
+ )
 import Cardano.Prelude
-import Servant ((:>), ReqBody, FormUrlEncoded, Post, JSON, QueryParam', Optional, RemoteHost, Header)
-import Servant.Client (ClientM, ClientError, client, BaseUrl (..), Scheme (..), mkClientEnv, runClientM)
+import Control.Concurrent.STM (TMVar, putTMVar, takeTMVar)
+import Data.Map.Strict qualified as Map
+import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime)
 import Network.HTTP.Client.TLS (newTlsManagerWith, tlsManagerSettings)
+import Servant (
+  FormUrlEncoded,
+  Header,
+  JSON,
+  Optional,
+  Post,
+  QueryParam',
+  RemoteHost,
+  ReqBody,
+  (:>),
+ )
+import Servant.Client (
+  BaseUrl (..),
+  ClientError,
+  ClientM,
+  Scheme (..),
+  client,
+  mkClientEnv,
+  runClientM,
+ )
 import System.IO (print)
 
 -- create recaptcha api keys at https://www.google.com/recaptcha/admin
@@ -111,53 +142,102 @@ checkRateLimits ::
   UTCTime ->
   [RateLimitAddress] ->
   ApiKey ->
-  TMVar (Map ApiKey (Map RateLimitAddress UTCTime)) ->
-  NominalDiffTime ->
+  TMVar UsageHistory ->
+  ApiKeyRateLimits ->
   STM RateLimitResult
-checkRateLimits now addresses apikey limitState akvRateLimit = do
-  mainMap <- readTMVar limitState
+checkRateLimits now addresses apikey limitState limits = do
+  hist@(UsageHistory addrHist globalHist) <- takeTMVar limitState
   let
-    -- when many addresses where last used, for the current key
-    apiKeyMap :: Map RateLimitAddress UTCTime
-    apiKeyMap = fromMaybe mempty (Map.lookup apikey mainMap)
-    -- when an address was last used
-    getLastUsage :: RateLimitAddress -> Maybe UTCTime
-    getLastUsage addr' = Map.lookup addr' apiKeyMap
-    lastUsages :: [Maybe UTCTime]
-    lastUsages = map getLastUsage addresses
-    compareTimes :: Maybe UTCTime -> Maybe UTCTime -> Maybe UTCTime
-    compareTimes Nothing Nothing = Nothing
-    compareTimes (Just a) Nothing = Just a
-    compareTimes Nothing (Just b) = Just b
-    compareTimes (Just a) (Just b) = Just (max a b)
-    -- when any of the addresses given, have last been used
-    lastUsage :: Maybe UTCTime
-    lastUsage = Cardano.Prelude.foldl' compareTimes Nothing lastUsages
-    recordUsage :: STM ()
-    recordUsage = do
-      mapM_ (insertUsage limitState apikey now) addresses
-  (allowed, result) <- case lastUsage of
-    Nothing -> do
-      -- this addr has never been used on this api key
-      pure (True, RateLimitResultAllow)
-    Just lastUsed -> do
-      let after = addUTCTime akvRateLimit lastUsed
-      pure $
-        if now > after
-          then (True, RateLimitResultAllow)
-          else (False, RateLimitResultDeny $ after `diffUTCTime` now)
-  when allowed recordUsage
+    -- When each address was used for the current key
+    addrAccesses = fromMaybe mempty (Map.lookup apikey addrHist)
+    -- When any address was used for the current key
+    globalAccesses = fromMaybe mempty (Map.lookup apikey globalHist)
+    -- Filter out global accesses outside of the configured window
+    prunedGlobalHist = pruneGlobalAccesses limits now globalAccesses
+
+    result =
+      checkAddrLimits now limits addresses addrAccesses
+        <> checkGlobalLimits now limits prunedGlobalHist
+
+  when (result == RateLimitResultAllow) $ do
+    let hist' = recordUsage now apikey addresses hist
+    putTMVar limitState hist'
+
   pure result
 
--- | Records a usage of the given API key at the given timestamp.
-insertUsage ::
-  TMVar (Map ApiKey (Map RateLimitAddress UTCTime)) -> ApiKey -> UTCTime -> RateLimitAddress -> STM ()
-insertUsage tmvar apikey now addr = do
-  mainMap <- takeTMVar tmvar
-  let
-    apiKeyMap :: Map RateLimitAddress UTCTime
-    apiKeyMap = fromMaybe mempty (Map.lookup apikey mainMap)
-    apiKeyMap' :: Map RateLimitAddress UTCTime
-    apiKeyMap' = Map.insert addr now apiKeyMap
-    mainMap' = Map.insert apikey apiKeyMap' mainMap
-  putTMVar tmvar mainMap'
+-- | Calculates whether a request is within per-address rate limit restrictions
+checkAddrLimits ::
+  UTCTime ->
+  ApiKeyRateLimits ->
+  [RateLimitAddress] ->
+  Map RateLimitAddress UTCTime ->
+  RateLimitResult
+checkAddrLimits now limits addrs usageHist =
+  case lastAccessedByAnyKey of
+    Nothing -> RateLimitResultAllow -- Never been used for
+    Just lastAccessed ->
+      let nextAllowed = nextAccessAllowedAt lastAccessed
+       in if now > nextAllowed
+            then RateLimitResultAllow
+            else RateLimitResultDeny (nextAllowed `diffUTCTime` now)
+  where
+    lastAccessedByAnyKey :: Maybe UTCTime
+    lastAccessedByAnyKey = maximumMay . mapMaybe (`Map.lookup` usageHist) $ addrs
+
+    nextAccessAllowedAt :: UTCTime -> UTCTime
+    nextAccessAllowedAt = addUTCTime $ grlWindow (rlPerAddress limits)
+
+pruneGlobalAccesses :: ApiKeyRateLimits -> UTCTime -> [UTCTime] -> [UTCTime]
+pruneGlobalAccesses (ApiKeyRateLimits {rlGlobal}) now =
+  filter $ isInWindow (grlWindow rlGlobal)
+  where
+    isInWindow :: NominalDiffTime -> UTCTime -> Bool
+    isInWindow diffTime accessedAt = diffTime `addUTCTime` accessedAt > now
+
+-- | Calculates whether a request is within global rate limit restrictions
+checkGlobalLimits :: UTCTime -> ApiKeyRateLimits -> [UTCTime] -> RateLimitResult
+checkGlobalLimits now limits@(ApiKeyRateLimits {rlGlobal}) usageHist =
+  if length accessesInWindow < fromIntegral (grlLimit rlGlobal)
+    then RateLimitResultAllow
+    else RateLimitResultDeny (nextAccessAllowedAt `diffUTCTime` now)
+  where
+    accessesInWindow :: [UTCTime]
+    accessesInWindow = pruneGlobalAccesses limits now usageHist
+
+    nextAccessAllowedAt :: UTCTime
+    nextAccessAllowedAt =
+      maybe now (grlWindow rlGlobal `addUTCTime`) $
+        lastMay $
+          drop
+            (fromIntegral (grlLimit rlGlobal) - 1)
+            accessesInWindow
+
+-- Records global and per-address usages for the specified addresses
+recordUsage :: UTCTime -> ApiKey -> [RateLimitAddress] -> UsageHistory -> UsageHistory
+recordUsage now key addrs (UsageHistory addrHist globalHist) =
+  let addrHist' = foldr (recordAddrUsage now key) addrHist addrs
+      globalHist' = recordGlobalUsage now key globalHist
+   in UsageHistory
+        { uhPerAddress = addrHist'
+        , uhGlobal = globalHist'
+        }
+
+-- | Records a usage of an address at the given timestamp for an API key
+recordAddrUsage ::
+  UTCTime ->
+  ApiKey ->
+  RateLimitAddress ->
+  Map ApiKey (Map RateLimitAddress UTCTime) ->
+  Map ApiKey (Map RateLimitAddress UTCTime)
+recordAddrUsage now key address addrHist =
+  Map.insert key (mkUsage address now) addrHist
+  where
+    mkUsage :: RateLimitAddress -> UTCTime -> Map RateLimitAddress UTCTime
+    mkUsage address' accessedAt =
+      Map.insert address' accessedAt (lookupApiKey key addrHist)
+
+    lookupApiKey key' = fromMaybe mempty . Map.lookup key'
+
+-- | Records a global usage at the given timestamp for an API key
+recordGlobalUsage :: UTCTime -> ApiKey -> Map ApiKey [UTCTime] -> Map ApiKey [UTCTime]
+recordGlobalUsage now key = Map.insertWith (++) key [now]

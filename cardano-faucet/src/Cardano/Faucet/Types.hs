@@ -19,9 +19,15 @@ module Cardano.Faucet.Types (
   SiteVerifyRequest (..),
   SecretKey,
   FaucetState (..),
+  RateLimitState (..),
+  UsageHistory (..),
   RateLimitResult (..),
   ApiKey (..),
+  ApiKeyRateLimits (..),
+  RateLimit (..),
   RateLimitAddress (..),
+  addressRateLimit,
+  globalRateLimit,
   describeApiKey,
   isLoopbackIp,
   keyFingerprint,
@@ -71,13 +77,15 @@ import Cardano.Api (
   VerificationKey,
   docToText,
  )
-import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Address (StakeCredential, StakeExtendedKey)
 import Cardano.Api.Certificate (PoolId)
+import Cardano.Api.Ledger qualified as L
 import Cardano.Api.Network (NetworkId (Mainnet, Testnet), NetworkMagic (NetworkMagic))
 import Cardano.Api.Tx (ShelleyWitnessSigningKey)
 import Cardano.Api.Value (AssetName (..))
 import Cardano.CLI.Type.Error.AddressCmdError
+import Cardano.Crypto.Hash (hashToStringAsHex, hashWith)
+import Cardano.Crypto.Hash.SHA256 (SHA256)
 import Cardano.Mnemonic (getMkSomeMnemonicError, mkSomeMnemonic)
 import Cardano.Prelude
 import Control.Concurrent.STM (TMVar, TQueue)
@@ -88,13 +96,11 @@ import Data.Aeson.KeyMap (member)
 import Data.Aeson.Types (Parser)
 import Data.ByteString.Char8 qualified as BSC
 import Data.Either.Combinators (mapRight)
-import Cardano.Crypto.Hash (hashToStringAsHex, hashWith)
-import Cardano.Crypto.Hash.SHA256 (SHA256)
 import Data.IP (IP (..), IPv6, fromIPv6b, ipv4ToIPv6, toIPv6b)
-import Data.Text.Encoding qualified as TE
 import Data.List.Split (splitOn)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Time.Clock (NominalDiffTime, UTCTime)
 import Protolude (print)
 import Servant (FromHttpApiData (parseHeader, parseQueryParam, parseUrlPiece))
@@ -218,11 +224,37 @@ data FaucetState era = FaucetState
   , fsPaymentVkey :: VerificationKey PaymentExtendedKey
   , fsAcctKey :: Shelley 'AccountK XPrv
   , fsConfig :: FaucetConfigFile
-  , fsSendMoneyRateLimitState :: TMVar (Map ApiKey (Map RateLimitAddress UTCTime))
-  , fsDelegationRateLimitState :: TMVar (Map ApiKey (Map RateLimitAddress UTCTime))
+  , fsRateLimitState :: RateLimitState
   , fsBucketSizes :: [FaucetValue]
   , fsOwnAddress :: AddressAny
   }
+
+data RateLimitState = RateLimitState
+  { rlsSendMoney :: TMVar UsageHistory
+  , rlsDelegation :: TMVar UsageHistory
+  }
+
+data UsageHistory = UsageHistory
+  { uhPerAddress :: Map ApiKey (Map RateLimitAddress UTCTime)
+  , uhGlobal :: Map ApiKey [UTCTime]
+  }
+  deriving (Eq, Ord)
+
+instance Semigroup UsageHistory where
+  hist1 <> hist2 =
+    UsageHistory
+      { uhPerAddress = perAddress'
+      , uhGlobal = global'
+      }
+    where
+      perAddress' = uhPerAddress hist1 <> uhPerAddress hist2
+      global' = uhGlobal hist1 <> uhGlobal hist2
+
+instance Monoid UsageHistory where
+  mempty = UsageHistory
+    { uhPerAddress = mempty
+    , uhGlobal = mempty
+    }
 
 data ScriptDataOrFile
   = -- | By reference to a CBOR file
@@ -234,7 +266,16 @@ data ScriptDataOrFile
   deriving (Eq, Show)
 
 -- the result of checking a rate limit
-data RateLimitResult = RateLimitResultAllow | RateLimitResultDeny NominalDiffTime
+data RateLimitResult 
+  = RateLimitResultAllow 
+  | RateLimitResultDeny NominalDiffTime
+  deriving (Eq, Ord, Show)
+
+instance Semigroup RateLimitResult where
+  RateLimitResultAllow <> RateLimitResultAllow = RateLimitResultAllow
+  deny@RateLimitResultDeny{} <> RateLimitResultAllow = deny
+  RateLimitResultAllow <> deny@RateLimitResultDeny{} = deny
+  RateLimitResultDeny t1 <> RateLimitResultDeny t2 = RateLimitResultDeny (max t1 t2)
 
 -- the key for rate limits
 data RateLimitAddress
@@ -305,12 +346,49 @@ instance Aeson.ToJSON DelegationReply where
 data ApiKeyValue = ApiKeyValue
   { akvApiKey :: Text
   , akvLovelace :: L.Coin
-  , akvRateLimit :: NominalDiffTime
-  , akvDelegationRateLimit :: NominalDiffTime
+  , akvRateLimits :: ApiKeyRateLimits
+  , akvDelegationRateLimit :: ApiKeyRateLimits
   , akvTokens :: Maybe FaucetToken
   , akvCanDelegate :: Bool
   }
-  deriving (Generic)
+  deriving (Generic, Show)
+
+data ApiKeyRateLimits = ApiKeyRateLimits
+  { rlGlobal :: RateLimit
+  , rlPerAddress :: RateLimit
+  }
+  deriving (Eq, Generic, Ord, Show)
+
+data RateLimit = RateLimit
+  { grlWindow :: NominalDiffTime
+  , grlLimit :: Word
+  }
+  deriving (Eq, Generic, Ord, Show)
+
+instance Aeson.FromJSON ApiKeyRateLimits where
+  parseJSON = Aeson.withObject "ApiKeyRateLimits" $ \val -> do
+    addrLimit <- val .: "per_address"
+    globalLimit <- val .: "global"
+
+    pure
+      ApiKeyRateLimits
+        { rlGlobal = globalLimit
+        , rlPerAddress = addressRateLimit addrLimit
+        }
+
+instance Aeson.FromJSON RateLimit where
+  parseJSON = Aeson.withObject "RateLimit" $ \val ->
+    RateLimit
+      <$> val
+      .: "window"
+      <*> val
+      .: "limit"
+
+addressRateLimit :: NominalDiffTime -> RateLimit
+addressRateLimit duration = RateLimit duration 1
+
+globalRateLimit :: NominalDiffTime -> Word -> RateLimit
+globalRateLimit = RateLimit
 
 -- deliberately no Show instance for ApiKeyValue, and none for FaucetConfigFile
 -- below either.
@@ -321,8 +399,8 @@ instance Aeson.FromJSON ApiKeyValue where
   parseJSON = Aeson.withObject "ApiKeyValue" $ \v -> do
     akvApiKey <- v .: "api_key"
     akvLovelace <- v .: "lovelace"
-    akvRateLimit <- v .: "rate_limit"
-    akvDelegationRateLimit <- fromMaybe akvRateLimit <$> v .:? "delegation_rate_limit"
+    akvRateLimits <- v .: "rate_limits"
+    akvDelegationRateLimit <- fromMaybe akvRateLimits <$> v .:? "delegation_rate_limit"
     akvTokens <- v .:? "tokens"
     akvCanDelegate <- fromMaybe False <$> v .:? "delegate"
     pure $ ApiKeyValue {..}
