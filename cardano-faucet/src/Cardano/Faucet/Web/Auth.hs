@@ -154,14 +154,19 @@ checkRateLimits now addresses apikey limitState limits = do
     globalAccesses = fromMaybe mempty (Map.lookup apikey globalHist)
     -- Filter out global accesses outside of the configured window
     prunedGlobalHist = pruneGlobalAccesses limits now globalAccesses
+    prunedHist = hist { uhGlobal = Map.insert apikey prunedGlobalHist globalHist } 
 
     result =
       checkAddrLimits now limits addresses addrAccesses
         <> checkGlobalLimits now limits prunedGlobalHist
 
-  when (result == RateLimitResultAllow) $ do
-    let hist' = recordUsage now apikey addresses hist
-    putTMVar limitState hist'
+  case result of
+    RateLimitResultAllow -> do
+      let hist' = recordUsage now apikey addresses prunedHist
+      putTMVar limitState hist'
+    RateLimitResultDeny _ ->
+      -- Don't record usage if access was denied
+      putTMVar limitState hist
 
   pure result
 

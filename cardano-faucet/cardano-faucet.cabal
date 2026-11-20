@@ -52,12 +52,12 @@ library
   hs-source-dirs:       src
 
   exposed-modules:      Cardano.Faucet
+                        Cardano.Faucet.Types
+                        Cardano.Faucet.Web
 
   other-modules:        Cardano.Faucet.Misc
                         Cardano.Faucet.TxUtils
-                        Cardano.Faucet.Types
                         Cardano.Faucet.Utils
-                        Cardano.Faucet.Web
                         Cardano.Faucet.Web.Auth
                         Paths_cardano_faucet
 
@@ -97,4 +97,15 @@ executable cardano-faucet
   import:               base, project-config
   main-is:              cardano-faucet.hs
   build-depends:        cardano-faucet
+  ghc-options:          -threaded
+
+test-suite rate-limits
+  import:               base, project-config
+  type:                 exitcode-stdio-1.0
+  hs-source-dirs:       test
+  main-is:              RateLimits.hs
+  build-depends:        cardano-faucet
+                      , aeson
+                      , stm
+                      , time
   ghc-options:          -threaded

@@ -84,7 +84,13 @@ Create the Faucet configuration file to `testnet-faucet/faucet-config.json`:
     {
       "api_key": "$API_KEY",
       "lovelace": 10000200000,
-      "rate_limit": 60,
+      "rate_limits": {
+        "per_address": 60,
+        "global": {
+          "window": 60,
+          "limit": 5
+        }
+      },
       "delegate": true
     }
   ],
@@ -92,7 +98,13 @@ Create the Faucet configuration file to `testnet-faucet/faucet-config.json`:
     "default": {
       "api_key": "unused",
       "lovelace": 10000200000,
-      "rate_limit": 86401,
+      "rate_limits": {
+        "per_address": 86401,
+        "global": {
+          "window": 86401,
+          "limit": 5
+        }
+      },
       "delegate": true
     }
   },

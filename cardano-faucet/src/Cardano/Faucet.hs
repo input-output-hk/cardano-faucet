@@ -141,8 +141,6 @@ main = do
         Api.InAnyShelleyBasedEra era faucetState <- atomically $ STM.takeTMVar stateVar
         putStrLn $ format ("lovelace values for api keys " % sh) $ fsBucketSizes faucetState
         putStrLn $ "faucet address: " <> Api.serialiseAddress (fsOwnAddress faucetState)
-        putStrLn $ "API Key rate limits: " <> show @_ @Text (fcfApiKeys fsConfig)
-        putStrLn $ "reCAPTCHA rate limits: " <> show @_ @Text (fcfRecaptchaLimits fsConfig)
         startApiServer era faucetState port
 
     -- Orchestrate node client and API server in separate threads. If either aborts, the

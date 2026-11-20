@@ -351,7 +351,7 @@ data ApiKeyValue = ApiKeyValue
   , akvTokens :: Maybe FaucetToken
   , akvCanDelegate :: Bool
   }
-  deriving (Generic, Show)
+  deriving (Generic)
 
 data ApiKeyRateLimits = ApiKeyRateLimits
   { rlGlobal :: RateLimit
@@ -400,7 +400,7 @@ instance Aeson.FromJSON ApiKeyValue where
     akvApiKey <- v .: "api_key"
     akvLovelace <- v .: "lovelace"
     akvRateLimits <- v .: "rate_limits"
-    akvDelegationRateLimit <- fromMaybe akvRateLimits <$> v .:? "delegation_rate_limit"
+    akvDelegationRateLimit <- fromMaybe akvRateLimits <$> v .:? "delegation_rate_limits"
     akvTokens <- v .:? "tokens"
     akvCanDelegate <- fromMaybe False <$> v .:? "delegate"
     pure $ ApiKeyValue {..}
