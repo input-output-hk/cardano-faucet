@@ -3,7 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 
 -- Run in the faucet development environment:
--- runghc -XNoImplicitPrelude -XOverloadedStrings -icardano-faucet/src tests/RateLimits.hs
+-- cabal test cardano-faucet:rate-limits
 module Main (main) where
 
 import Prelude
@@ -129,6 +129,32 @@ main = do
     send 301 >>= denied "send still blocked after five minutes" 86099
     send 86401 >>= allowed "send after one day"
     -- Denied requests must not extend the cooldown.
+
+    globalState <- newTMVarIO mempty
+    let globalLimits = ApiKeyRateLimits (RateLimit 60 2) (RateLimit 1 1)
+        request seconds ip = atomically $
+          checkRateLimits
+            (addUTCTime seconds start)
+            [RateLimitAddressNetwork (read ip)]
+            key
+            globalState
+            globalLimits
+
+    request 0 "::1" >>= allowed "first global slot"
+    request 10 "::2" >>= allowed "second global slot"
+    historyBeforeDenial <- atomically $ readTMVar globalState
+    request 20 "::3" >>= denied "global limit spans addresses" 40
+    historyAfterDenial <- atomically $ tryReadTMVar globalState
+    assert "denial preserves the TMVar and history" $
+      historyAfterDenial == Just historyBeforeDenial
+
+    request 60 "::3" >>= allowed "oldest access expires at window boundary"
+    request 61 "::4" >>= denied "second access still occupies a slot" 9
+    request 70 "::4" >>= allowed "denial does not extend global cooldown"
+    history <- atomically $ readTMVar globalState
+    assert "expired global accesses are removed from stored history" $
+      sum (fmap length (uhGlobal history)) == 2
+
   putStrLn "Rate-limit regression checks passed"
  where
   decode val = case fromJSON val of
